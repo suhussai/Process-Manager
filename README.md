@@ -25,6 +25,7 @@ To compile the file:
 $ make
 
 To Run the program:
+
 1. set the env variable 
 $ export PROCNANNYLOGS="logsProc"
 
