@@ -94,7 +94,7 @@ void getPIDs(char * processName, int * PIDs, int numberOfPIDs) {
   int counter = 0;
   PIDs[0] = -1; // default value
   for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
-    snprintf(getPIDcommand, 140, "ps -e | grep '%s' | awk '{print $1}' | tail -n %d | head -n 1", processName, numberOfPIDs - counter);
+    snprintf(getPIDcommand, 140, "ps -e | grep ' %s' | awk '{print $1}' | tail -n %d | head -n 1", processName, numberOfPIDs - counter);
     //printf("%s \n", command);
 
     getPIDfp = popen(getPIDcommand, "r");
@@ -126,7 +126,7 @@ int getNumberOfPIDsForProcess(char * processName) {
   char * numberOfPIDSbuffer = malloc(100);
   char * numberOfPIDScommand = malloc(150);
   int numberOfPIDs = -1;
-  snprintf(numberOfPIDScommand, 140, "ps -e | grep '%s' | awk '{print $1}' | wc -l", processName);
+  snprintf(numberOfPIDScommand, 140, "ps -e | grep ' %s' | awk '{print $1}' | wc -l", processName);
   //printf("%s \n", command);
 
   fp = popen(numberOfPIDScommand, "r");
