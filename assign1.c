@@ -58,6 +58,27 @@ void writeToLogs(char * logLevel, char * message) {
 }
 
 
+int countNumberOfPIDs(int PID) {
+  FILE * getPIDfp;
+  char * getPIDbuffer = malloc(100);
+  char * getPIDcommand = malloc(150);
+  int count = -1;
+  snprintf(getPIDcommand, 140, "ps -e | grep '%d' -c", PID);
+  getPIDfp = popen(getPIDcommand, "r");
+  if (getPIDfp != NULL) {
+    fgets(getPIDbuffer, 15, getPIDfp);    
+    count = atoi(getPIDbuffer);
+    //printf("%s process has PID %d \n", processName, PIDs[counter]);
+  }
+
+  pclose(getPIDfp);
+  free(getPIDbuffer);
+  free(getPIDcommand);
+  return count;
+}
+
+
+
 void getPIDs(char * processName, int * PIDs, int numberOfPIDs) {
   // populates PIDs with 
   // the PIDs that correspond 
@@ -71,7 +92,7 @@ void getPIDs(char * processName, int * PIDs, int numberOfPIDs) {
   char * getPIDbuffer = malloc(100);
   char * getPIDcommand = malloc(150);
   int counter = 0;
-
+  PIDs[0] = -1; // default value
   for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
     snprintf(getPIDcommand, 140, "ps -e | grep '%s' | awk '{print $1}' | tail -n %d | head -n 1", processName, numberOfPIDs - counter);
     //printf("%s \n", command);
@@ -124,43 +145,70 @@ int getNumberOfPIDsForProcess(char * processName) {
 }
 
 int waitAndKill(char * processName, int processLifeSpan, int * PIDs, int numberOfPIDs) {
-  /* printf("pretending to kill %s \n", processName); */
-  /* sleep(processLifeSpan); */
-  /* printf("pretending finished after %d \n", processLifeSpan); */
-  /* return 1; */
-
-  char * killCommand = malloc(150);
+  char * inputBuffer = malloc(150);
+  char * startOfInputBuffer = inputBuffer;
   int killed = 0;
   // processLifeSpan is in seconds
   sleep(processLifeSpan);
 
   FILE * fp;
-  //  int * PIDs;
-  //int numberOfPIDs = getPIDs(processName, PIDs);
-  
-  // http://superuser.com/questions/401133/pipe-output-of-awk-to-kill-9
-  //  snprintf(command, 140, "ps -e | awk '/%s/ {print $1}' | xargs kill -9", processName);
   int counter = 0;
+
   for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
-    if (getNumberOfPIDsForProcess(processName) == 0) {
-      printf("process %s (%d) already dead", processName, PIDs[counter]);
-      continue;
+
+    if (countNumberOfPIDs(PIDs[counter]) == 1) {
+      snprintf(inputBuffer, 140, "kill -9 %d", PIDs[counter]);
+      //printf("%s \n", command);
+      //    fp = popen(inputBuffer, "r");
+
+      if (PIDs[counter] != -1 && (fp = popen(inputBuffer, "r")) != NULL) {
+	killed = killed + 1;
+
+	// during first loop
+	if (killed == 1) {
+	  inputBuffer += sprintf(inputBuffer, "PID (%d", PIDs[counter]);
+	}
+
+	// default loop
+	else {
+	  inputBuffer += sprintf(inputBuffer, ", %d", PIDs[counter]);	  
+	}
+
+
+      } 
     }
-    
-    
-    snprintf(killCommand, 140, "kill -9 %d", PIDs[counter]);
-    //printf("%s \n", command);
-
-
-    fp = popen(killCommand, "r");
-    if (fp != NULL) {
-      printf("process %s killed\n", processName);
-      killed = killed + 1;
+    else {
+      snprintf(inputBuffer, 290, "PID (%d) (%s) died before %d seconds. \n", PIDs[counter], processName, processLifeSpan);
+      writeToLogs("Info", inputBuffer);
+      
     }
     
   }
 
-  free(killCommand);
+  if (killed > 0) {
+    inputBuffer += sprintf(inputBuffer, ") (%s) killed after exceeding %d seconds. \n", processName, processLifeSpan);	  
+    inputBuffer = startOfInputBuffer;
+    writeToLogs("Action", inputBuffer);
+    
+  }
+
+
+
+  while ((numberOfPIDs = getNumberOfPIDsForProcess(processName)) > 0) {
+    getPIDs(processName, PIDs, numberOfPIDs);
+    snprintf(inputBuffer, 140, "kill -9 %d", PIDs[0]);
+    //printf("%s \n", command);
+    //    fp = popen(inputBuffer, "r");
+
+    if (PIDs[0] != -1 && (fp = popen(inputBuffer, "r")) != NULL) {
+      //printf("process %s killed\n", processName);
+      //      snprintf(message, 290, "PID (%d) (%s) killed after exceeding %d seconds. \n", PIDs[0], processName, processLifeSpan);
+      //      writeToLogs("Action", message);
+      killed = killed + 1;
+    }
+  }
+
+  free(inputBuffer);
   pclose(fp);
   return killed;
 }
@@ -169,61 +217,70 @@ int waitAndKill(char * processName, int processLifeSpan, int * PIDs, int numberO
 // kill previous procnannies
 void killOldProcNannies()  {
   int numberOfProcNanniePIDs = getNumberOfPIDsForProcess("procnanny");
+  
   if (numberOfProcNanniePIDs > 1) {
-    printf("found %d processes of procnanny running. Commencing deletion", numberOfProcNanniePIDs);
-    int * procNanniePIDs = malloc(numberOfProcNanniePIDs);
+    char * inputBuffer = malloc(150);
+    FILE * fp;
+    //printf("found %d processes of procnanny running. Commencing deletion... \n", numberOfProcNanniePIDs);
+    int * procNanniePIDs = malloc(numberOfProcNanniePIDs + 50);
     getPIDs("procnanny", procNanniePIDs, numberOfProcNanniePIDs);
 
     // remove current pid
     int currentProcPID = getpid();
-    int * procNanniePIDsWithoutCurrentPID = malloc(numberOfProcNanniePIDs);
     int tmpCounter = 0;
     for (tmpCounter = 0; tmpCounter < numberOfProcNanniePIDs; tmpCounter = tmpCounter + 1) {
       if (currentProcPID != procNanniePIDs[tmpCounter]) {
-	procNanniePIDsWithoutCurrentPID[tmpCounter] = procNanniePIDs[tmpCounter];
+	snprintf(inputBuffer, 140, "kill -9 %d", procNanniePIDs[tmpCounter]);
+	//printf("%s \n", inputBuffer);
+
+	if ((fp = popen(inputBuffer, "r")) != NULL) {
+	  snprintf(inputBuffer, 120, "An old procnanny (%d) was killed \n",  procNanniePIDs[tmpCounter]);
+	  writeToLogs("Warning", inputBuffer);
+	}
+
       }
     }
 
-    
-    waitAndKill("procnanny", 0, procNanniePIDsWithoutCurrentPID, numberOfProcNanniePIDs - 1);    
 
+    free(inputBuffer);
     free(procNanniePIDs);
-    free(procNanniePIDsWithoutCurrentPID);
   }
-
   
 }
 
 
 static int  * numberOfProcessesKilled;
-//static int  * numberOfProcesses;
 
 int main(int argc, char *argv[]) {
 
   numberOfProcessesKilled = mmap(NULL, sizeof * numberOfProcessesKilled, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-
-  //  *numberOfProcesses = 0;
+  
   *numberOfProcessesKilled = 0;
   FILE * fp2;
+  fp2 = fopen(argv[1],"r");
+  if (fp2 == NULL) { 
+    clearLogs();
+    writeToLogs("Error", "Configuration file not found.\n");
+    printf("Configuration file not found.\n");
+    exit(0); 
+  }
+
+
   char * line = NULL;
   size_t len = 0;
   ssize_t read;
-  fp2 = fopen(argv[1],"r");
-  if (fp2 == NULL) { exit(0); }
-
   int count = 1;
   int status;
   int processLifeSpan = 0;
   int pid;
-
+  clearLogs();
   killOldProcNannies();
-
+  
   while ((read = getline(&line, &len, fp2)) != -1) {
     //printf("line = %s", line);
     if (count == 1) {
       // process life span
       processLifeSpan = atoi(line);
-      clearLogs();
       count = count + 1;
       continue;
     }
@@ -248,32 +305,46 @@ int main(int argc, char *argv[]) {
       int counter = 0;
       char * dateVar = malloc(30);
       char * message;
+      char * startOfMessage;
       int * PIDs;
 
       numberOfPIDs = getNumberOfPIDsForProcess(processName);
       //printf("for %d %s we have  the number of PIDs is equal to %d \n", getpid(), processName, numberOfPIDs);
       PIDs = malloc(numberOfPIDs + 100); 
       message = malloc(300);
+      startOfMessage = message;
 
       getPIDs(processName, PIDs, numberOfPIDs);
 
-      
+      // print out messages to logs regarding which
+      // processes are being monitored
       for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
-	snprintf(message, 290, "Initializing monitoring of process '%s' (%d) \n", processName, PIDs[counter]);
-	writeToLogs("Info", message);	
-      }
 
-      printf("child process pid=%d spawned, it ", getpid());
-      printf("will monitor process: %s and will be killed in %d seconds \n", line, processLifeSpan);
-      //printf("%s \n", dateVar);
-      //*numberOfProcesses = *numberOfProcesses + 1;
-      int procsKilled = waitAndKill(processName, processLifeSpan, PIDs, numberOfPIDs);
-      *numberOfProcessesKilled = *numberOfProcessesKilled + procsKilled;
-      
-      for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
-	snprintf(message, 290, "PID (%d) (%s) killed after exceeding %d seconds. \n", PIDs[counter], processName, processLifeSpan);
-	writeToLogs("Action", message);
+	// during first loop
+	if (counter == 0) {
+	  message += sprintf(message, "Initializing monitoring of process '%s' (%d", processName, PIDs[counter]);
+	}
+
+	// default loop
+	else {
+	  message += sprintf(message, ", %d", PIDs[counter]);	  
+	}
+
+	// during last loop
+	if (counter + 1 == numberOfPIDs) {
+	  message += sprintf(message, ") \n");	  
+	  message = startOfMessage;
+	  writeToLogs("Info", message);	
+
+	}
       }
+      
+      
+
+      int procsKilled = waitAndKill(processName, processLifeSpan, PIDs, numberOfPIDs);
+      // increment global variable keeping track of number of processes killed
+      *numberOfProcessesKilled = *numberOfProcessesKilled + procsKilled;
+
       
       free(message);
       free(dateVar);
@@ -301,15 +372,11 @@ int main(int argc, char *argv[]) {
   message = malloc(300);
 
   //printf("from parent %d \n", getpid());
-  printf("total number of processes killed are %d\n", *numberOfProcessesKilled);
+  //printf("total number of processes killed are %d\n", *numberOfProcessesKilled);
   snprintf(message, 290, "Exiting. %d process(es) killed. \n", *numberOfProcessesKilled);
   writeToLogs("Info", message);
-    
 
   free(message);
-  /* free(dateVar); */
-  /* free(PIDs); */
-
 
   fclose(fp2);
   munmap(numberOfProcessesKilled, sizeof * numberOfProcessesKilled);
