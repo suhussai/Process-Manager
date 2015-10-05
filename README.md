@@ -9,18 +9,20 @@ and how to execute your programs including command line parameters.
 
 Name: ***REMOVED***
 Student Number: ***REMOVED***
-Unix ID:
-Lecture Section:
+Unix ID: ***REMOVED***
+Lecture Section: ***REMOVED***
 Instructor's Name: ***REMOVED***
-Lab Section:
-TA's Name:
+Lab Section: ***REMOVED***
+TA's Name: ***REMOVED***
 
 procnanny --- 
+
 C program to monitor processes. Requires a configuration file, with the first line
 indicating the amount of time. in seconds, the program must allow a process to run
 before killing it. Each line after the first line lists the processes that must be monitored.
 
 How to Run --- 
+
 To compile the file:
 $ make
 
