@@ -1,12 +1,6 @@
 # procnanny
 Assignment1 CMPUT379: C program to fork processes to monitor user specified processes  
 
-(1) your name, (2) student number, (3) Unix id, (4) lecture section, (5) instructor's name, (6) lab section, and (7) TA's name clearly labelled. 
-Marks will be deducted if any of these items are missing. 
-The README file must also include a short description of your program, 
-as well as a description of the relevant commands to build (e.g. make all) 
-and how to execute your programs including command line parameters.
-
 Name: ***REMOVED***
 Student Number: ***REMOVED***
 Unix ID: ***REMOVED***
@@ -24,6 +18,7 @@ before killing it. Each line after the first line lists the processes that must 
 How to Run --- 
 
 To compile the file:
+
 $ make
 
 To Run the program:
