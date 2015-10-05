@@ -2,11 +2,17 @@
 Assignment1 CMPUT379: C program to fork processes to monitor user specified processes  
 
 Name: ***REMOVED***
+
 Student Number: ***REMOVED***
+
 Unix ID: ***REMOVED***
+
 Lecture Section: ***REMOVED***
+
 Instructor's Name: ***REMOVED***
+
 Lab Section: ***REMOVED***
+
 TA's Name: ***REMOVED***
 
 procnanny --- 
