@@ -10,6 +10,157 @@
 #include "memwatch.h"
 
 
+void getDate(char * dateVar);
+void clearLogs();
+
+static int  * numberOfProcessesKilled;
+void writeToLogs(char * logLevel, char * message);
+int countNumberOfPIDs(int PID);
+void getPIDs(char * processName, int * PIDs, int numberOfPIDs);
+int getNumberOfPIDsForProcess(char * processName);
+int waitAndKill(char * processName, int processLifeSpan, int * PIDs, int numberOfPIDs);
+void killOldProcNannies();
+
+
+int main(int argc, char *argv[]) {
+
+  numberOfProcessesKilled = mmap(NULL, sizeof * numberOfProcessesKilled, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+  
+  *numberOfProcessesKilled = 0;
+  FILE * fp2;
+  fp2 = fopen(argv[1],"r");
+  if (fp2 == NULL) { 
+    clearLogs();
+    writeToLogs("Error", "Configuration file not found.\n");
+    printf("Configuration file not found.\n");
+    exit(0); 
+  }
+
+
+  char * line = NULL;
+  size_t len = 0; 
+  ssize_t read;
+  int status = 0;
+  int processLifeSpan = 0;
+  char * processName = NULL;
+  int pid = 0;
+  clearLogs();
+  killOldProcNannies();
+
+  char delimiter = ' ';
+  
+  while ((read = getline(&line, &len, fp2)) != -1) {
+    
+    char * tmp = strchr(line, delimiter);
+    processLifeSpan = atoi(tmp);
+    strncpy(line, line, strlen(line) - strlen(tmp));
+    line[strlen(line) - strlen(tmp)] = '\0'; // removes new line
+    processName = line;
+
+
+    printf("%s \n", processName);
+    printf("%d \n", processLifeSpan);
+
+    // only proceed to forking a new process if we even need to
+    if (getNumberOfPIDsForProcess(processName)  < 1) {
+      char * message;
+      message = malloc(300);
+
+      snprintf(message, 290, "No '%s' processes found. \n", processName);
+      writeToLogs("Info", message);
+      
+      free(message);
+      continue;
+    }
+
+    pid = fork();
+    if (pid == 0) {
+      // child process
+      
+      int numberOfPIDs = 0;
+      int counter = 0;
+      char * dateVar = malloc(30);
+      char * message;
+      char * startOfMessage;
+      int * PIDs;
+
+      numberOfPIDs = getNumberOfPIDsForProcess(processName);
+      printf("for %d %s we have  the number of PIDs is equal to %d \n", getpid(), processName, numberOfPIDs);
+      PIDs = malloc(numberOfPIDs + 100);
+      message = malloc(300);
+      startOfMessage = message;
+
+      getPIDs(processName, PIDs, numberOfPIDs);
+
+      // print out messages to logs regarding which
+      // processes are being monitored
+      for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
+
+  	// during first loop
+  	if (counter == 0) {
+  	  message += sprintf(message, "Initializing monitoring of process '%s' (%d", processName, PIDs[counter]);
+  	}
+
+  	// default loop
+  	else {
+  	  message += sprintf(message, ", %d", PIDs[counter]);
+  	}
+
+  	// during last loop
+  	if (counter + 1 == numberOfPIDs) {
+  	  message += sprintf(message, ") \n");
+  	  message = startOfMessage;
+  	  writeToLogs("Info", message);
+
+  	}
+      }
+      
+      
+
+      int procsKilled = waitAndKill(processName, processLifeSpan, PIDs, numberOfPIDs);
+      // increment global variable keeping track of number of processes killed
+      *numberOfProcessesKilled = *numberOfProcessesKilled + procsKilled;
+
+      
+      free(message);
+      free(dateVar);
+      free(PIDs);
+      fclose(fp2);
+
+      exit(0);
+      //break;
+    }
+    else if (pid == -1) {
+      printf("error in forking. \n");
+      exit(1);
+      
+    }
+    else {
+      //printf("parent process pid=%d \n", getpid());
+    }
+
+  }
+
+
+  // wait for children to finish
+  while((pid = wait(&status)) != -1) { }
+  char * message;
+  message = malloc(300);
+
+  //printf("from parent %d \n", getpid());
+  //printf("total number of processes killed are %d\n", *numberOfProcessesKilled);
+  snprintf(message, 290, "Exiting. %d process(es) killed. \n", *numberOfProcessesKilled);
+  writeToLogs("Info", message);
+
+  free(message);
+
+  fclose(fp2);
+  munmap(numberOfProcessesKilled, sizeof * numberOfProcessesKilled);
+  return 0;
+}
+
+
+
 void getDate(char * dateVar) {
   FILE * fpTemp;
   fpTemp = popen("date", "r");
@@ -249,137 +400,4 @@ void killOldProcNannies()  {
 }
 
 
-static int  * numberOfProcessesKilled;
-
-int main(int argc, char *argv[]) {
-
-  numberOfProcessesKilled = mmap(NULL, sizeof * numberOfProcessesKilled, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-  
-  *numberOfProcessesKilled = 0;
-  FILE * fp2;
-  fp2 = fopen(argv[1],"r");
-  if (fp2 == NULL) { 
-    clearLogs();
-    writeToLogs("Error", "Configuration file not found.\n");
-    printf("Configuration file not found.\n");
-    exit(0); 
-  }
-
-
-  char * line = NULL;
-  size_t len = 0;
-  ssize_t read;
-  int count = 1;
-  int status;
-  int processLifeSpan = 0;
-  int pid;
-  clearLogs();
-  killOldProcNannies();
-  
-  while ((read = getline(&line, &len, fp2)) != -1) {
-    //printf("line = %s", line);
-    if (count == 1) {
-      // process life span
-      processLifeSpan = atoi(line);
-      count = count + 1;
-      continue;
-    }
-
-    line[strlen(line) - 1] = '\0'; // remove new line character
-    char * processName = line;
-
-    // only proceed to forking a new process if we even need to 
-    if (getNumberOfPIDsForProcess(processName)  < 1) {
-      char * message;
-      message = malloc(300);
-
-      snprintf(message, 290, "No '%s' processes found. \n", processName);
-      writeToLogs("Info", message);
-      
-      free(message);
-      continue;
-    }
-    pid = fork();
-    if (pid == 0) {
-      int numberOfPIDs = 0;
-      int counter = 0;
-      char * dateVar = malloc(30);
-      char * message;
-      char * startOfMessage;
-      int * PIDs;
-
-      numberOfPIDs = getNumberOfPIDsForProcess(processName);
-      //printf("for %d %s we have  the number of PIDs is equal to %d \n", getpid(), processName, numberOfPIDs);
-      PIDs = malloc(numberOfPIDs + 100); 
-      message = malloc(300);
-      startOfMessage = message;
-
-      getPIDs(processName, PIDs, numberOfPIDs);
-
-      // print out messages to logs regarding which
-      // processes are being monitored
-      for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
-
-	// during first loop
-	if (counter == 0) {
-	  message += sprintf(message, "Initializing monitoring of process '%s' (%d", processName, PIDs[counter]);
-	}
-
-	// default loop
-	else {
-	  message += sprintf(message, ", %d", PIDs[counter]);	  
-	}
-
-	// during last loop
-	if (counter + 1 == numberOfPIDs) {
-	  message += sprintf(message, ") \n");	  
-	  message = startOfMessage;
-	  writeToLogs("Info", message);	
-
-	}
-      }
-      
-      
-
-      int procsKilled = waitAndKill(processName, processLifeSpan, PIDs, numberOfPIDs);
-      // increment global variable keeping track of number of processes killed
-      *numberOfProcessesKilled = *numberOfProcessesKilled + procsKilled;
-
-      
-      free(message);
-      free(dateVar);
-      free(PIDs);
-      fclose(fp2);
-
-      exit(0);
-      //break;
-    }
-    else if (pid == -1) {
-      printf("error in forking. \n");
-      exit(1);
-      
-    }    
-    else {
-      //printf("parent process pid=%d \n", getpid()); 
-    }
-
-  }
-
-
-  // wait for children to finish
-  while((pid = wait(&status)) != -1) { }
-  char * message;
-  message = malloc(300);
-
-  //printf("from parent %d \n", getpid());
-  //printf("total number of processes killed are %d\n", *numberOfProcessesKilled);
-  snprintf(message, 290, "Exiting. %d process(es) killed. \n", *numberOfProcessesKilled);
-  writeToLogs("Info", message);
-
-  free(message);
-
-  fclose(fp2);
-  munmap(numberOfProcessesKilled, sizeof * numberOfProcessesKilled);
-  return 0;
-}
 
