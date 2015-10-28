@@ -8,25 +8,56 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include "memwatch.h"
-
+#include <fcntl.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 void getDate(char * dateVar);
 void clearLogs();
 
-static int  * numberOfProcessesKilled;
+int totalProcsKilled = 0;
 void writeToLogs(char * logLevel, char * message);
 int countNumberOfPIDs(int PID);
 void getPIDs(char * processName, int * PIDs, int numberOfPIDs);
 int getNumberOfPIDsForProcess(char * processName);
 int waitAndKill(char * processName, int processLifeSpan, int * PIDs, int numberOfPIDs);
 void killOldProcNannies();
+int p2c[2]; // p2c[0] gets written to on parent, p2c[1] gets read on child
+int c2p[2]; // c2p[0] gets written to on child, c2p[1] gets read on parent
+
+
+int updateKillCount(int n ) {
+  
+  /* read message start */
+  printf("preparing to read messages \n");
+  close(c2p[1]);
+  char pipeBuffer[17];
+  n = read(c2p[0], pipeBuffer, n);
+  printf("%d is what we got and n = %d \n", atoi(pipeBuffer), n);
+  /* read message end */
+  printf("finished reading messages \n");
+
+  if (n!=0) {
+    totalProcsKilled += atoi(pipeBuffer);
+    
+  }
+  return n;
+}
 
 
 int main(int argc, char *argv[]) {
+  if (pipe(p2c) < 0) {
+    printf("pipe error");
+    exit(0);
+  }
 
-  numberOfProcessesKilled = mmap(NULL, sizeof * numberOfProcessesKilled, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+  if (pipe(c2p) < 0) {
+    printf("pipe error");
+    exit(0);
+  }
+
+
   
-  *numberOfProcessesKilled = 0;
   FILE * fp2;
   fp2 = fopen(argv[1],"r");
   if (fp2 == NULL) { 
@@ -39,7 +70,7 @@ int main(int argc, char *argv[]) {
 
   char * line = NULL;
   size_t len = 0; 
-  ssize_t read;
+  ssize_t read1;
   int status = 0;
   int processLifeSpan = 0;
   char * processName = NULL;
@@ -49,7 +80,7 @@ int main(int argc, char *argv[]) {
 
   char delimiter = ' ';
   
-  while ((read = getline(&line, &len, fp2)) != -1) {
+  while ((read1 = getline(&line, &len, fp2)) != -1) {
     
     char * tmp = strchr(line, delimiter);
     processLifeSpan = atoi(tmp);
@@ -76,6 +107,9 @@ int main(int argc, char *argv[]) {
     pid = fork();
     if (pid == 0) {
       // child process
+
+
+
       
       int numberOfPIDs = 0;
       int counter = 0;
@@ -118,8 +152,16 @@ int main(int argc, char *argv[]) {
       
 
       int procsKilled = waitAndKill(processName, processLifeSpan, PIDs, numberOfPIDs);
-      // increment global variable keeping track of number of processes killed
-      *numberOfProcessesKilled = *numberOfProcessesKilled + procsKilled;
+
+      printf("printing before writing to pipe \n");
+      /* write message start */
+      close(c2p[0]);
+      char tmpStr[5];
+      sprintf(tmpStr, "%d", procsKilled);
+      write(c2p[1], tmpStr, 5);
+      /* write message end */
+      printf("done writing to pipe \n");
+
 
       
       free(message);
@@ -136,6 +178,8 @@ int main(int argc, char *argv[]) {
       
     }
     else {
+      
+
       //printf("parent process pid=%d \n", getpid());
     }
 
@@ -144,22 +188,30 @@ int main(int argc, char *argv[]) {
 
   // wait for children to finish
   while((pid = wait(&status)) != -1) { }
+  int n = -1;
+  n = updateKillCount(5);    
+  
+  while(n!=0) {
+    n = updateKillCount(n);        
+  }
+
+  
+
+
   char * message;
   message = malloc(300);
 
   //printf("from parent %d \n", getpid());
-  //printf("total number of processes killed are %d\n", *numberOfProcessesKilled);
-  snprintf(message, 290, "Exiting. %d process(es) killed. \n", *numberOfProcessesKilled);
+  snprintf(message, 290, "Exiting. %d process(es) killed. \n", totalProcsKilled);
   writeToLogs("Info", message);
 
   free(message);
 
   fclose(fp2);
-  munmap(numberOfProcessesKilled, sizeof * numberOfProcessesKilled);
+
+  printf("According to us, we got a kill count of %d ", totalProcsKilled);
   return 0;
 }
-
-
 
 void getDate(char * dateVar) {
   FILE * fpTemp;
