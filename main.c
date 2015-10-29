@@ -28,6 +28,7 @@ void killOldProcNannies();
 void monitor(char * processName, int processLifeSpan);
 int updateKillCount(int n);
 void sighup_handler(int signum);
+void sigint_handler(int signum);
 void readAndExecute();
 void wrap_up();
 
@@ -37,6 +38,7 @@ int killCountPipe[2]; // killCountPipe[0] gets written to on child, killCountPip
 
 int main(int argc, char *argv[]) {
   signal(SIGHUP, sighup_handler);
+  signal(SIGINT, sigint_handler);
   
   if (pipe(newProcessToChild) < 0) {
     printf("pipe error");
@@ -62,12 +64,30 @@ int main(int argc, char *argv[]) {
 
 
 void sighup_handler(int signum) {
-  printf("caught sig \n");
+  writeToLogs("Info", "Caught SIGHUP. Configuration file 'nanny.config' re-read.\n");
+  printf("Caught SIGHUP. Configuration file 'nanny.config' re-read.\n");
+
   readAndExecute();
 
-  printf("beginngin wrap_up \n");
+  printf("beginning wrap_up \n");
   wrap_up();
 }
+
+void sigint_handler(int signum) {
+  
+  printf("from parent: printing before writing to pipe \n");
+  /* write message start */
+  close(newProcessToChild[0]);
+  char tmpStr2[12];
+  strcpy(tmpStr2,"-1");
+  //  sprintf(tmpStr2, "%s", processName);
+  write(newProcessToChild[1], tmpStr2, strlen(tmpStr2) + 1);
+  /* write message end */
+  printf("from parent: done writing to pipe \n");
+
+  
+}
+
 
 int updateKillCount(int n) {
 
@@ -76,17 +96,19 @@ int updateKillCount(int n) {
   // parent-controlled totalProcsKilled variable
   
   /* read message start */
-  printf("preparing to read messages \n");
+  //printf("preparing to read messages \n");
   close(killCountPipe[1]);
   char pipeBuffer[17];
   n = read(killCountPipe[0], pipeBuffer, n);
-  printf("%d is what we got and n = %d \n", atoi(pipeBuffer), n);
+  //  printf("%d is what we got and n = %d \n", atoi(pipeBuffer), n);
   /* read message end */
-  printf("finished reading messages \n");
+  //  printf("finished reading messages \n");
 
   if (n!=0) {
     // in this scope, we know that a child process just ended
     // so we can incremement freeChildren variable
+    printf("%d is what we got and n = %d \n", atoi(pipeBuffer), n);
+
     totalProcsKilled += atoi(pipeBuffer);
     freeChildren++;
   }
@@ -102,17 +124,6 @@ void monitor(char * processName, int processLifeSpan) {
   // - generates its own variables and frees as needed
   // 
 
-  // check to make sure process "processName" is still active 
-  if (getNumberOfPIDsForProcess(processName)  < 1) {
-    char * message;
-    message = malloc(300);
-
-    snprintf(message, 290, "No '%s' processes found. \n", processName);
-    writeToLogs("Info", message);
-      
-    free(message);
-  }
-
 
   // child process
   int numberOfPIDs = 0;
@@ -122,84 +133,108 @@ void monitor(char * processName, int processLifeSpan) {
   char * startOfMessage;
   int * PIDs;
 
-  numberOfPIDs = getNumberOfPIDsForProcess(processName);
-  printf("for %d %s we have  the number of PIDs is equal to %d \n", getpid(), processName, numberOfPIDs);
-  PIDs = malloc(numberOfPIDs + 100);
-  message = malloc(300);
-  startOfMessage = message;
 
-  getPIDs(processName, PIDs, numberOfPIDs);
+  while(processName != NULL) {
 
-  // print out messages to logs regarding which
-  // processes are being monitored
-  for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
 
-    // during first loop
-    if (counter == 0) {
-      message += sprintf(message, "Initializing monitoring of process '%s' (%d", processName, PIDs[counter]);
-    }
+    
+    // check to make sure process "processName" is still active 
+    if (getNumberOfPIDsForProcess(processName)  < 1) {
+      char * message;
+      message = malloc(300);
 
-    // default loop
-    else {
-      message += sprintf(message, ", %d", PIDs[counter]);
-    }
-
-    // during last loop
-    if (counter + 1 == numberOfPIDs) {
-      message += sprintf(message, ") \n");
-      message = startOfMessage;
+      snprintf(message, 290, "No '%s' processes found. \n", processName);
       writeToLogs("Info", message);
+      
+      free(message);
+    }
+
+
+    numberOfPIDs = getNumberOfPIDsForProcess(processName);
+    printf("we are %d", getpid());
+    printf("for %d %s we have  the number of PIDs is equal to %d \n", getpid(), processName, numberOfPIDs);
+    PIDs = malloc(numberOfPIDs + 100);
+    message = malloc(300);
+    startOfMessage = message;
+
+    getPIDs(processName, PIDs, numberOfPIDs);
+
+    // print out messages to logs regarding which
+    // processes are being monitored
+    for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
+
+      // during first loop
+      if (counter == 0) {
+	message += sprintf(message, "Initializing monitoring of process '%s' (%d", processName, PIDs[counter]);
+      }
+
+      // default loop
+      else {
+	message += sprintf(message, ", %d", PIDs[counter]);
+      }
+
+      // during last loop
+      if (counter + 1 == numberOfPIDs) {
+	message += sprintf(message, ") \n");
+	message = startOfMessage;
+	writeToLogs("Info", message);
+
+      }
+    }
+      
+      
+
+    int procsKilled = waitAndKill(processName, processLifeSpan, PIDs, numberOfPIDs);
+
+    printf("from child: printing before writing to pipe \n");
+    /* write message start */
+    close(killCountPipe[0]);
+    char tmpStr[5];
+    sprintf(tmpStr, "%d", procsKilled);
+    write(killCountPipe[1], tmpStr, 5);
+    /* write message end */
+    printf("from child: done writing to pipe \n");
+
+    int n = 0;
+    while(n == 0){
+      /* read message start */
+      printf("from child: preparing to read messages \n");
+
+      /*
+	Wed. 28
+	child stops at above statement waiting for new processes.
+
+	- needs to restart when new processName received
+
+	- need to get killcount updated on parent somehow
+      */
+
+
+      close(newProcessToChild[1]);
+      char pipeBuffer[100];
+      n = read(newProcessToChild[0], pipeBuffer, 99);
+      printf("from child: %s is what we got and n = %d \n", pipeBuffer, n);
+      /* read message end */
+      printf("from child: finished reading messages \n");
+      if (strcmp(pipeBuffer, "-1") == 0) {
+	printf("I should close now");
+	processName = NULL;
+
+	free(message);
+	free(dateVar);
+	free(PIDs);
+	//  fclose(fp2);
+
+	exit(0);
+	//break;
+
+      }
+      processName = pipeBuffer;
 
     }
-  }
-      
-      
-
-  int procsKilled = waitAndKill(processName, processLifeSpan, PIDs, numberOfPIDs);
-
-  printf("from child: printing before writing to pipe \n");
-  /* write message start */
-  close(killCountPipe[0]);
-  char tmpStr[5];
-  sprintf(tmpStr, "%d", procsKilled);
-  write(killCountPipe[1], tmpStr, 5);
-  free(tmpStr);
-  /* write message end */
-  printf("from child: done writing to pipe \n");
-
-  int n = 0;
-  while(n == 0){
-    /* read message start */
-    printf("from child: preparing to read messages \n");
-
-    /*
-      Wed. 28
-      child stops at above statement waiting for new processes.
-
-      - needs to restart when new processName received
-
-      - need to get killcount updated on parent somehow
-    */
-
-
-    close(newProcessToChild[1]);
-    char pipeBuffer[100];
-    n = read(newProcessToChild[0], pipeBuffer, 99);
-    printf("from child: %s is what we got and n = %d \n", pipeBuffer, n);
-    /* read message end */
-    printf("from child: finished reading messages \n");
     
   }
-
-
       
-  free(message);
-  free(dateVar);
-  free(PIDs);
-  //  fclose(fp2);
-
-  exit(0);
-  //break;
 
 }
 
@@ -241,7 +276,7 @@ void readAndExecute() {
     printf("%s \n", processName);
     printf("%d \n", processLifeSpan);
     printf("freeChildren is %d \n", freeChildren);
-      
+    
     if (freeChildren > 0) {
       // write to pipe newProcessToChild
       printf("freeChildren is %d, preparing to reuse child", freeChildren);
@@ -262,6 +297,7 @@ void readAndExecute() {
     pid = fork();
     if (pid == 0) {
       // child portion
+      prinft("Spawned A child for process: %s", processName);
       fclose(fp2);
       monitor(processName, processLifeSpan);
     }
@@ -290,27 +326,31 @@ void wrap_up() {
   int status = 0;
   int pid = 0;
 
-  // wait for children to finish
-  while((pid = wait(&status)) != -1) { } 
-  /*
-    Wed. 28
-    parent stops at above statement waiting for children to exit.
-   */
+
 
   // update kill count before closing
   int n = -1;
   n = updateKillCount(5); // 5 is random value indicating size of what to read from pipe     
   
-  while(n!=0) {
-    n = updateKillCount(n);        
-  }
+
+  // wait for children to finish
+  while((pid = wait(&status)) != -1) {     
+    while(n!=0) {
+      n = updateKillCount(n);        
+    }
+  } 
+  /*
+    Wed. 28
+    parent stops at above statement waiting for children to exit.
+   */
 
   char * message;
   message = malloc(300);
 
   //printf("from parent %d \n", getpid());
-  snprintf(message, 290, "Exiting. %d process(es) killed. \n", totalProcsKilled);
+  snprintf(message, 290, "Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled);
   writeToLogs("Info", message);
+  printf("%s", message);
 
   free(message);
 
