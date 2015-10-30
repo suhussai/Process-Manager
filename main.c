@@ -144,7 +144,7 @@ int updateKillCount(int n) {
   // parent-controlled totalProcsKilled variable
   
   /* read message start */
-  //printf("preparing to read messages \n");
+  printf("from parent preparing to read messages \n");
   close(killCountPipe[1]);
   char pipeBuffer[5];
   n = read(killCountPipe[0], pipeBuffer, n);
@@ -155,7 +155,7 @@ int updateKillCount(int n) {
   if (n!=0) {
     // in this scope, we know that a child process just ended
     // so we can incremement freeChildren variable
-    printf("%d is what we got and n = %d \n", atoi(pipeBuffer), n);
+    printf("parent: %d is what we got and n = %d \n", atoi(pipeBuffer), n);
 
     totalProcsKilled += atoi(pipeBuffer);
     //freeChildren++;
@@ -234,8 +234,10 @@ void monitor(char * processName, int processLifeSpan) {
   /* write message start */
   close(killCountPipe[0]);
   char tmpStr[5];
-  sprintf(tmpStr, "%d", procsKilled);
-  write(killCountPipe[1], tmpStr, 5);
+  sprintf(tmpStr, "%d\n", procsKilled);
+  write(killCountPipe[1], tmpStr, strlen(tmpStr));
+  sprintf(tmpStr, "0\n");
+  write(killCountPipe[1], tmpStr, strlen(tmpStr));
   /* write message end */
   printf("from child: done writing to pipe \n");
 
@@ -322,12 +324,16 @@ void readAndExecute() {
 
   while(1) {
 
-    fp2 = fopen(fileName,"r");
-    if (fp2 == NULL) { 
-      clearLogs();
-      writeToLogs("Error", "Configuration file not found.\n");
-      printf("Configuration file not found.\n");
-      exit(0); 
+    if (rereadFromConfigFile == 1) {
+
+      fp2 = fopen(fileName,"r");
+      if (fp2 == NULL) { 
+	clearLogs();
+	writeToLogs("Error", "Configuration file not found.\n");
+	printf("Configuration file not found.\n");
+	exit(0); 
+      }
+
     }
 
     printf("reread = %d\n", rereadFromConfigFile);
@@ -390,6 +396,41 @@ void readAndExecute() {
 
     rereadFromConfigFile = -1;
     sleep(5);
+
+    // check if any children are free
+      // update kill count before closing
+
+    /* read message start */
+    printf("!!!!!!!!!!!!!!!!!!!!!!from parent preparing to read messages \n\n\n");
+    close(killCountPipe[1]);
+    char pipeBuffer[5];
+    int n = 1;
+    //    sleep(2);
+    while(n > 0) {
+      n = read(killCountPipe[0], pipeBuffer, 5);
+      printf("it is %d\n", atoi(pipeBuffer));
+      if (atoi(pipeBuffer) == 0) {
+	n = 0;
+	printf("done\n");
+      }
+
+      write(STDOUT_FILENO, pipeBuffer, n);
+      printf("comp: %d \n",strcmp(pipeBuffer,"0")); 
+      printf("comp2: %d \n",strcmp(pipeBuffer,"0\n")); 
+      totalProcsKilled += atoi(pipeBuffer);
+
+      
+
+      //printf("parent: %d is what we got and n = %d \n", atoi(pipeBuffer), n);
+      /* read message end */
+    }
+
+    printf("\n\n\nparent: finished reading messages \n");
+    
+
+    //check for processes 
+
+    
 
 
 
