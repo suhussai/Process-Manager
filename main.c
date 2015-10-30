@@ -27,8 +27,8 @@ int getNumberOfPIDsForProcess(char * processName);
 int waitAndKill(char * processName, int processLifeSpan, int * PIDs, int numberOfPIDs);
 void killOldProcNannies();
 void monitor(char * processName, int processLifeSpan);
-int updateKillCount(int n);
-void sighup_handler(int signum);
+void updateKillCount();
+void sig_handler(int signum);
 void sigint_handler(int signum);
 void readAndExecute();
 void wrap_up();
@@ -38,9 +38,12 @@ int killCountPipe[2]; // killCountPipe[0] gets written to on child, killCountPip
 int numberOfChildren = 0;
 struct sigaction sa;
 int rereadFromConfigFile = 1;
+int parentPid = 0;
+
 int main(int argc, char *argv[]) {
 
-  sa.sa_handler = sighup_handler;
+  parentPid = getpid();
+  sa.sa_handler = sig_handler;
   int errorSig = sigaction(SIGHUP, &sa, NULL);
   if (errorSig == -1) {
     printf("error in seting signal");
@@ -64,6 +67,8 @@ int main(int argc, char *argv[]) {
     exit(0);
   }
 
+
+
   fileName = argv[1];
 
   clearLogs();
@@ -77,67 +82,65 @@ int main(int argc, char *argv[]) {
 }
 
 
-void sighup_handler(int signum) {
+void sig_handler(int signum) {
+  int i = 0;
 
-  writeToLogs("Info", "Caught SIGHUP. Configuration file 'nanny.config' re-read.\n");
-  printf("\n\n\nCaught SIGHUP. Configuration file 'nanny.config' re-read.\n\n\n");
-  rereadFromConfigFile = 1;
+  switch(signum) {
+    
+  case 1:
+    writeToLogs("Info", "Caught SIGHUP. Configuration file 'nanny.config' re-read.\n");
+    printf("\n\n\nCaught SIGHUP. Configuration file 'nanny.config' re-read.\n\n\n");
+    rereadFromConfigFile = 1;
+    break;
+  case 2:
+    for (i = 0; i < numberOfChildren; i++) {
+  
+      printf("from parent: printing before writing to pipe \n");
+      /* write message start */
+      close(newProcessToChild[0]);
+      char tmpStr2[12];
+      strcpy(tmpStr2,"-1");
+      //  sprintf(tmpStr2, "%s", processName);
+      write(newProcessToChild[1], tmpStr2, strlen(tmpStr2));
+      /* write message end */
+      printf("from parent: done writing to pipe \n");
+      
+    }
+    
+    char * message;
+    message = malloc(300);
 
-  /* readAndExecute(); */
+    //printf("from parent %d \n", getpid());
+    snprintf(message, 290, "Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled);
+    writeToLogs("Info", message);
+    printf("%s", message);
 
-  /* printf("beginning wrap_up \n"); */
-  /* wrap_up(); */
+    free(message);
+
+    printf("According to us, we got a kill count of %d \n", totalProcsKilled);
+  
+    exit(0);
+
+    break;
+  case 10:
+    printf("caught sigusr1\n");
+    updateKillCount();        
+    break;
+  default:
+    printf("idk\n");
+  }
 }
 
 void sigint_handler(int signum) {
   signal(SIGINT, sigint_handler);
 
-  int i = 0;
-  for (i = 0; i < numberOfChildren; i++) {
-  
-    printf("from parent: printing before writing to pipe \n");
-    /* write message start */
-    close(newProcessToChild[0]);
-    char tmpStr2[12];
-    strcpy(tmpStr2,"-1");
-    //  sprintf(tmpStr2, "%s", processName);
-    write(newProcessToChild[1], tmpStr2, strlen(tmpStr2));
-    /* write message end */
-    printf("from parent: done writing to pipe \n");
-
-  }
-
-
-  // update kill count before closing
-  int n = -1;
-  n = updateKillCount(5); // 5 is random value indicating size of what to read from pipe     
-  
-  while(n > 0) {
-    n = updateKillCount(n);        
-  }
-
-
-
-  char * message;
-  message = malloc(300);
-
-  //printf("from parent %d \n", getpid());
-  snprintf(message, 290, "Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled);
-  writeToLogs("Info", message);
-  printf("%s", message);
-
-  free(message);
-
-  printf("According to us, we got a kill count of %d \n", totalProcsKilled);
-  
-  exit(0);
 
 
   
 }
 
 
-int updateKillCount(int n) {
+void updateKillCount() {
 
   // reads pipe killCountPipe for message indicating the kills
   // process have committed and updates 
@@ -147,21 +150,14 @@ int updateKillCount(int n) {
   printf("from parent preparing to read messages \n");
   close(killCountPipe[1]);
   char pipeBuffer[5];
-  n = read(killCountPipe[0], pipeBuffer, n);
-  //  printf("%d is what we got and n = %d \n", atoi(pipeBuffer), n);
-  /* read message end */
-  //  printf("finished reading messages \n");
-
-  if (n!=0) {
-    // in this scope, we know that a child process just ended
-    // so we can incremement freeChildren variable
-    printf("parent: %d is what we got and n = %d \n", atoi(pipeBuffer), n);
-
-    totalProcsKilled += atoi(pipeBuffer);
-    //freeChildren++;
-  }
+  int n = 0;
+  n = read(killCountPipe[0], pipeBuffer, 3);
   
-  return n;
+  printf("updating kill\n");
+  printf("parent: %d is what we got and n = %d \n", atoi(pipeBuffer), n);
+
+  totalProcsKilled += atoi(pipeBuffer);
+  
 }
 
 void monitor(char * processName, int processLifeSpan) {
@@ -233,13 +229,15 @@ void monitor(char * processName, int processLifeSpan) {
   printf("from child: printing before writing to pipe \n");
   /* write message start */
   close(killCountPipe[0]);
-  char tmpStr[5];
-  sprintf(tmpStr, "%d\n", procsKilled);
-  write(killCountPipe[1], tmpStr, strlen(tmpStr));
-  sprintf(tmpStr, "0\n");
+  char tmpStr[3];
+  sprintf(tmpStr, "%d", procsKilled);
   write(killCountPipe[1], tmpStr, strlen(tmpStr));
   /* write message end */
   printf("from child: done writing to pipe \n");
+
+  printf("signalling parent pid=%d\n", parentPid);
+  kill(parentPid, SIGUSR1);
+  sleep(10);
 
   free(message);
   free(dateVar);
@@ -256,38 +254,40 @@ void dispatch() {
   // reads pipe and transfer info to funcion monitor
   
   int n = 0;
-  while(n == 0){
-    /* read message start */
-    printf("from child: preparing to read messages \n");
+  /* read message start */
+  char pipeBuffer[15];
+  printf("from child: preparing to read messages \n");
 
+  while (n == 0) {
     close(newProcessToChild[1]);
-    char pipeBuffer[15];
     n = read(newProcessToChild[0], pipeBuffer, 15);
-    printf("from child: %s is what we got and n = %d \n", pipeBuffer, n);
-    /* read message end */
-    printf("from child: finished reading messages \n");
-
-    if (strcmp(pipeBuffer, "-1") == 0) {
-      printf("I should close now\n");
-
-      exit(0);
-      //break;
-
-    }
-    else {
-
-      int processLifeSpan = 0;
-      char * processName;
-      char * tmpL = strchr(pipeBuffer, ' ');
-      processLifeSpan = atoi(tmpL);
-      strncpy(pipeBuffer, pipeBuffer, strlen(pipeBuffer) - strlen(tmpL));
-      pipeBuffer[strlen(pipeBuffer) - strlen(tmpL)] = '\0'; // removes new pipeBuffer
-      processName = pipeBuffer;
-
-      monitor(processName, processLifeSpan);
-    }
-    
   }
+
+  printf("from child: %s is what we got and n = %d \n", pipeBuffer, n);
+  /* read message end */
+  printf("from child: finished reading messages \n");
+
+
+  if (strcmp(pipeBuffer, "-1") == 0) {
+    printf("I should close now\n");
+
+    exit(0);
+    //break;
+
+  }
+  else {
+
+    int processLifeSpan = 0;
+    char * processName;
+    char * tmpL = strchr(pipeBuffer, ' ');
+    processLifeSpan = atoi(tmpL);
+    strncpy(pipeBuffer, pipeBuffer, strlen(pipeBuffer) - strlen(tmpL));
+    pipeBuffer[strlen(pipeBuffer) - strlen(tmpL)] = '\0'; // removes new pipeBuffer
+    processName = pipeBuffer;
+
+    monitor(processName, processLifeSpan);
+  }
+    
 
   //exit(0);
   
@@ -297,9 +297,11 @@ void dispatch() {
 void readAndExecute() {
   printf("starting readAndExecute\n");
 
-  sa.sa_handler = sighup_handler;
+  sa.sa_handler = sig_handler;
   int errorSig = sigaction(SIGHUP, &sa, NULL);
-  if (errorSig == -1) {
+  errorSig += sigaction(SIGINT, &sa, NULL);
+  errorSig += sigaction(SIGUSR1, &sa, NULL);
+  if (errorSig < 0) {
     printf("error in seting signal");
     exit(0);
   }
@@ -397,42 +399,7 @@ void readAndExecute() {
     rereadFromConfigFile = -1;
     sleep(5);
 
-    // check if any children are free
-      // update kill count before closing
-
-    /* read message start */
-    printf("!!!!!!!!!!!!!!!!!!!!!!from parent preparing to read messages \n\n\n");
-    close(killCountPipe[1]);
-    char pipeBuffer[5];
-    int n = 1;
-    //    sleep(2);
-    while(n > 0) {
-      n = read(killCountPipe[0], pipeBuffer, 5);
-      printf("it is %d\n", atoi(pipeBuffer));
-      if (atoi(pipeBuffer) == 0) {
-	n = 0;
-	printf("done\n");
-      }
-
-      write(STDOUT_FILENO, pipeBuffer, n);
-      printf("comp: %d \n",strcmp(pipeBuffer,"0")); 
-      printf("comp2: %d \n",strcmp(pipeBuffer,"0\n")); 
-      totalProcsKilled += atoi(pipeBuffer);
-
-      
-
-      //printf("parent: %d is what we got and n = %d \n", atoi(pipeBuffer), n);
-      /* read message end */
-    }
-
-    printf("\n\n\nparent: finished reading messages \n");
-    
-
     //check for processes 
-
-    
-
-
 
 
   }
