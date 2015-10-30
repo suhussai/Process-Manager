@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
 
 void getDate(char * dateVar);
 void clearLogs();
@@ -35,13 +36,23 @@ void dispatch();
 int newProcessToChild[2]; // p2c[0] gets written to on parent, p2c[1] gets read on child
 int killCountPipe[2]; // killCountPipe[0] gets written to on child, killCountPipe[1] gets read on parent
 int numberOfChildren = 0;
-
+struct sigaction sa;
+int rereadFromConfigFile = 1;
 int main(int argc, char *argv[]) {
+
+  sa.sa_handler = sighup_handler;
+  int errorSig = sigaction(SIGHUP, &sa, NULL);
+  if (errorSig == -1) {
+    printf("error in seting signal");
+    exit(0);
+  }
+
+  printf("set handlers\n");
+
 
   freeChildren = mmap(NULL, sizeof * freeChildren, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0); 
   *freeChildren = 0;
-  signal(SIGHUP, sighup_handler);
-  signal(SIGINT, sigint_handler);
+
   
   if (pipe(newProcessToChild) < 0) {
     printf("pipe error");
@@ -61,21 +72,21 @@ int main(int argc, char *argv[]) {
 
   readAndExecute();
   printf("parent in main, going to wrap_up\n");
-  wrap_up();
+  //  wrap_up();
   return 0;
 }
 
 
 void sighup_handler(int signum) {
-  signal(SIGHUP, sighup_handler);
 
   writeToLogs("Info", "Caught SIGHUP. Configuration file 'nanny.config' re-read.\n");
-  printf("Caught SIGHUP. Configuration file 'nanny.config' re-read.\n");
+  printf("\n\n\nCaught SIGHUP. Configuration file 'nanny.config' re-read.\n\n\n");
+  rereadFromConfigFile = 1;
 
-  readAndExecute();
+  /* readAndExecute(); */
 
-  printf("beginning wrap_up \n");
-  wrap_up();
+  /* printf("beginning wrap_up \n"); */
+  /* wrap_up(); */
 }
 
 void sigint_handler(int signum) {
@@ -90,7 +101,7 @@ void sigint_handler(int signum) {
     char tmpStr2[12];
     strcpy(tmpStr2,"-1");
     //  sprintf(tmpStr2, "%s", processName);
-    write(newProcessToChild[1], tmpStr2, strlen(tmpStr2) + 1);
+    write(newProcessToChild[1], tmpStr2, strlen(tmpStr2));
     /* write message end */
     printf("from parent: done writing to pipe \n");
 
@@ -101,7 +112,7 @@ void sigint_handler(int signum) {
   int n = -1;
   n = updateKillCount(5); // 5 is random value indicating size of what to read from pipe     
   
-  while(n!=0) {
+  while(n > 0) {
     n = updateKillCount(n);        
   }
 
@@ -135,7 +146,7 @@ int updateKillCount(int n) {
   /* read message start */
   //printf("preparing to read messages \n");
   close(killCountPipe[1]);
-  char pipeBuffer[17];
+  char pipeBuffer[5];
   n = read(killCountPipe[0], pipeBuffer, n);
   //  printf("%d is what we got and n = %d \n", atoi(pipeBuffer), n);
   /* read message end */
@@ -248,8 +259,8 @@ void dispatch() {
     printf("from child: preparing to read messages \n");
 
     close(newProcessToChild[1]);
-    char pipeBuffer[100];
-    n = read(newProcessToChild[0], pipeBuffer, 99);
+    char pipeBuffer[15];
+    n = read(newProcessToChild[0], pipeBuffer, 15);
     printf("from child: %s is what we got and n = %d \n", pipeBuffer, n);
     /* read message end */
     printf("from child: finished reading messages \n");
@@ -284,16 +295,18 @@ void dispatch() {
 void readAndExecute() {
   printf("starting readAndExecute\n");
 
+  sa.sa_handler = sighup_handler;
+  int errorSig = sigaction(SIGHUP, &sa, NULL);
+  if (errorSig == -1) {
+    printf("error in seting signal");
+    exit(0);
+  }
+  printf("hanlder resetted !!!!!!!!\n");
+
+
   FILE * fp2;
   if (fileName == NULL) {
     exit(0);
-  }
-  fp2 = fopen(fileName,"r");
-  if (fp2 == NULL) { 
-    clearLogs();
-    writeToLogs("Error", "Configuration file not found.\n");
-    printf("Configuration file not found.\n");
-    exit(0); 
   }
 
 
@@ -307,66 +320,87 @@ void readAndExecute() {
 
   char delimiter = ' ';
 
-  while ((read1 = getline(&line, &len, fp2)) != -1) {
-    printf("from parent: starting main while \n ");
-    
-    char * tmp = strchr(line, delimiter);
-    processLifeSpan = atoi(tmp);
-    strncpy(line, line, strlen(line) - strlen(tmp));
-    line[strlen(line) - strlen(tmp)] = '\0'; // removes new line
-    processName = line;
+  while(1) {
 
-
-    printf("%s \n", processName);
-    printf("%d \n", processLifeSpan);
-    printf("freeChildren is %d \n", *freeChildren);
-    
-    if (*freeChildren > 0) {
-      // write to pipe newProcessToChild
-      printf("freeChildren is %d, preparing to reuse child", *freeChildren);
-      printf("from parent: printing before writing to pipe \n");
-      /* write message start */
-      close(newProcessToChild[0]);
-      char tmpStr[120];
-      sprintf(tmpStr, "%s %d", processName, processLifeSpan);
-      write(newProcessToChild[1], tmpStr, strlen(tmpStr) + 1);
-      free(tmpStr);
-      /* write message end */
-      printf("from parent: done writing to pipe \n");
-
-      printf("decing freeChildren\n");
-
-      *freeChildren = *freeChildren - 1;
-      continue;
+    fp2 = fopen(fileName,"r");
+    if (fp2 == NULL) { 
+      clearLogs();
+      writeToLogs("Error", "Configuration file not found.\n");
+      printf("Configuration file not found.\n");
+      exit(0); 
     }
 
-    pid = fork();
-    if (pid == 0) {
-      
-      // child portion
-      printf("Spawned A child for process: %s \n", processName);
-      fclose(fp2);
-      monitor(processName, processLifeSpan);
-      while(1) {
-	printf("staring dispatch \n");
-	dispatch();
+    printf("reread = %d\n", rereadFromConfigFile);
+    while ((read1 = getline(&line, &len, fp2)) != -1 && rereadFromConfigFile == 1) {
+      printf("from parent: starting main while \n ");
+    
+      char * tmp = strchr(line, delimiter);
+      processLifeSpan = atoi(tmp);
+      strncpy(line, line, strlen(line) - strlen(tmp));
+      line[strlen(line) - strlen(tmp)] = '\0'; // removes new line
+      processName = line;
 
+
+      printf("%s \n", processName);
+      printf("%d \n", processLifeSpan);
+      printf("freeChildren is %d \n", *freeChildren);
+    
+      if (*freeChildren > 0) {
+	// write to pipe newProcessToChild
+	printf("freeChildren is %d, preparing to reuse child", *freeChildren);
+	printf("from parent: printing before writing to pipe \n");
+	/* write message start */
+	close(newProcessToChild[0]);
+	char tmpStr[strlen(processName) + 2];
+	sprintf(tmpStr, "%s %d", processName, processLifeSpan);
+	write(newProcessToChild[1], tmpStr, strlen(tmpStr) + 1);
+	free(tmpStr);
+	/* write message end */
+	printf("from parent: done writing to pipe \n");
+
+	printf("decing freeChildren\n");
+
+	*freeChildren = *freeChildren - 1;
+	continue;
       }
+
+      pid = fork();
+      if (pid == 0) {
+      
+	// child portion
+	printf("Spawned A child for process: %s \n", processName);
+	fclose(fp2);
+	monitor(processName, processLifeSpan);
+	while(1) {
+	  printf("staring dispatch \n");
+	  dispatch();
+
+	}
+      }
+      else if (pid == -1) {
+	printf("error in forking. \n");
+	exit(1);
+      }
+      else {
+	numberOfChildren++;
+	//printf("parent process pid=%d \n", getpid());
+      }
+
     }
-    else if (pid == -1) {
-      printf("error in forking. \n");
-      exit(1);
-    }
-    else {
-      numberOfChildren++;
-      //printf("parent process pid=%d \n", getpid());
-    }
+
+    rereadFromConfigFile = -1;
+    sleep(5);
+
+
+
 
   }
 
   fclose(fp2);
 
   printf("done with readAndExecute \n");
+
+
 }
 
 void wrap_up() {
@@ -377,16 +411,12 @@ void wrap_up() {
   
 
   printf("going into waiting\n");
-  while(1) {
+  while(rereadFromConfigFile == -1) {
     sleep(5);
     
     // check for processes
     
   }
-  /*
-    Wed. 28
-    parent stops at above statement waiting for children to exit.
-   */
 }
 
 
