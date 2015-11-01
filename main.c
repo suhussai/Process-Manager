@@ -317,6 +317,7 @@ void readAndExecute() {
 	writeToLogs("Info", message);
       
 	free(message);
+	continue;
       }
       
       printf("we are %d \n", getpid());
@@ -362,7 +363,7 @@ void readAndExecute() {
 	  char tmpStr[strlen(processName) + 5];
 	  sprintf(tmpStr, "%s#%d!%d", processName, PIDs[counter], processLifeSpan);
 	  write(newProcessToChild[1], tmpStr, strlen(tmpStr) + 1);
-	  free(tmpStr);
+	  //free(tmpStr);
 	  /* write message end */
 	  //	  printf("from parent: done writing to pipe \n");
 
@@ -403,20 +404,21 @@ void readAndExecute() {
 	} // spawning child end bracket
 
       } // for loop end bracket
-        
+     
+      free(PIDs);
+      free(message);
+
     }// while loop for reading file
 
     rereadFromConfigFile = -1;
     sleep(5);
-    //kill(getpid(), SIGINT);
+    //sleep(10);
+    //kill(getpid(), SIGHUP);
     //check for processes 
     
 
 
   }
-
-  free(PIDs);
-  free(message);
 
   fclose(fp2);
 
