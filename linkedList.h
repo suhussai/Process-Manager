@@ -2,7 +2,12 @@
 #define LINKED_LIST_H_
 
 
-struct node;
+//struct node;
+
+struct node {
+  char * value;
+  struct node * next;
+};
 
 struct node * init(char *);
 int getSize(struct node * );

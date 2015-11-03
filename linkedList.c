@@ -16,11 +16,7 @@
 
 
 
-struct node {
-  char * value;
-  struct node * next;
-};
-
+struct node;
 struct node * init(char * headValue) {
 
   struct node * head = malloc(sizeof(struct node));
