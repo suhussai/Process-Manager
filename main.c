@@ -40,12 +40,129 @@ int numberOfChildren = 0;
 struct sigaction sa;
 int rereadFromConfigFile = 1;
 int parentPid = 0;
-
 struct node * head;
 
-int main(int argc, char *argv[]) {
+void monitorProcess(char * processName, int processLifeSpan) {
+  // takes processName and lifeSpan 
+  // converts processName to PIDs 
+  // and monitors each PID by either 
+  // spawning a child for that process or 
+  // or reusing a "unbusy" child depending
+  // on the global freeChildren variable.
 
-  //  struct node * head;
+  char * message;
+  char * startOfMessage;
+  int * PIDs;
+  int counter = 0;
+  int pid = 0;
+  int parentPID = getpid();
+  
+  int numberOfPIDs = 0;
+
+  // check to make sure process "processName" is still active 
+  if ((numberOfPIDs = getNumberOfPIDsForProcess(processName))  < 1) {
+    char * message;
+    message = malloc(300);
+
+    snprintf(message, 290, "No '%s' processes found. \n", processName);
+    writeToLogs("Info", message);
+      
+    free(message);
+    return;
+  }
+      
+  printf("we are %d \n", getpid());
+  printf("for %d %s we have  the number of PIDs is equal to %d \n", getpid(), processName, numberOfPIDs);
+  PIDs = malloc(numberOfPIDs + 100);
+  message = malloc(300);
+  startOfMessage = message;
+
+  getPIDs(processName, PIDs, numberOfPIDs);
+
+  // print out messages to logs regarding which
+  // processes are being monitored
+  for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
+
+    // during first loop
+    if (counter == 0) {
+      message += sprintf(message, "Initializing monitoring of process '%s' (%d", processName, PIDs[counter]);
+    }
+    // default loop
+    else {
+      message += sprintf(message, ", %d", PIDs[counter]);
+    }
+
+    // during last loop
+    if (counter + 1 == numberOfPIDs) {
+      message += sprintf(message, ") \n");
+      message = startOfMessage;
+      writeToLogs("Info", message);
+
+    }
+  }
+
+
+  for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
+
+    if (freeChildren > 0) {
+      // write to pipe newProcessToChild
+      printf("freeChildren is %d, preparing to reuse child", freeChildren);
+      //	  printf("from parent: printing before writing to pipe \n");
+      /* write message start */
+      close(newProcessToChild[0]);
+      char tmpStr[strlen(processName) + 5];
+      sprintf(tmpStr, "%s#%d!%d", processName, PIDs[counter], processLifeSpan);
+      write(newProcessToChild[1], tmpStr, strlen(tmpStr) + 1);
+      //free(tmpStr);
+      /* write message end */
+      //	  printf("from parent: done writing to pipe \n");
+
+      //	  printf("decing freeChildren\n");
+
+      freeChildren = freeChildren - 1;
+    }
+	
+    else {
+      pid = fork();
+      if (pid == 0) {
+      
+	// child portion
+	printf("Spawned A child for process: %s \n", processName);
+	//monitor(processName, processLifeSpan);
+
+	//waitAndKill(processLifeSpan, PIDs[counter]);
+	dispatch(parentPID, processName, PIDs[counter], processLifeSpan);
+	    
+	while(keepLooping == 1) {
+	  printf("staring dispatch \n");
+	  dispatch(parentPID, processName, -1, processLifeSpan);
+
+	}
+
+	    
+      }
+      else if (pid == -1) {
+	printf("error in forking. \n");
+	exit(1);
+      }
+      else {
+	numberOfChildren++;
+	//printf("parent process pid=%d \n", getpid());
+      }
+	  
+    } // spawning child end bracket
+
+  } // for loop end bracket
+
+
+
+  free(PIDs);
+  free(message);
+     
+
+}
+
+int main(int argc, char *argv[]) {
 
   parentPid = getpid();
   printf("!!!!!!!Parent PID = %d\n", parentPid);
@@ -173,6 +290,7 @@ void updateKillCount() {
   printf("incrementing freeChildren\n");
   free(tmpBuffer);
   free(inputBuffer);
+  free(pipeBuffer);
   free(processName);
   freeChildren++;
   
@@ -270,15 +388,11 @@ void readAndExecute() {
   //int status = 0;
   int processLifeSpan = 0;
   char * processName = NULL;
-  int pid = 0;
+  //  int pid = 0;
 
-  char * message;
-  char * startOfMessage;
-  int * PIDs;
 
   // child process
-  int counter = 0;
-  int parentPID = getpid();
+  //  int counter = 0;
 
   char delimiter = ' ';
 
@@ -302,6 +416,7 @@ void readAndExecute() {
       char * tmp = strchr(line, delimiter);
       processLifeSpan = atoi(tmp);
       strncpy(line, line, strlen(line) - strlen(tmp));
+      printf("removing new line character*********\n");
       line[strlen(line) - strlen(tmp)] = '\0'; // removes new line
       processName = line;
 
@@ -322,107 +437,9 @@ void readAndExecute() {
       // convert processName into PIDs
       // pass PIDs, one by one, into a separate child
 
-      int numberOfPIDs = 0;
 
-      // check to make sure process "processName" is still active 
-      if ((numberOfPIDs = getNumberOfPIDsForProcess(processName))  < 1) {
-	char * message;
-	message = malloc(300);
-
-	snprintf(message, 290, "No '%s' processes found. \n", processName);
-	writeToLogs("Info", message);
-      
-	free(message);
-	continue;
-      }
-      
-      printf("we are %d \n", getpid());
-      printf("for %d %s we have  the number of PIDs is equal to %d \n", getpid(), processName, numberOfPIDs);
-      PIDs = malloc(numberOfPIDs + 100);
-      message = malloc(300);
-      startOfMessage = message;
-
-      getPIDs(processName, PIDs, numberOfPIDs);
-
-      // print out messages to logs regarding which
-      // processes are being monitored
-      for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
-
-	// during first loop
-	if (counter == 0) {
-	  message += sprintf(message, "Initializing monitoring of process '%s' (%d", processName, PIDs[counter]);
-	}
-
-	// default loop
-	else {
-	  message += sprintf(message, ", %d", PIDs[counter]);
-	}
-
-	// during last loop
-	if (counter + 1 == numberOfPIDs) {
-	  message += sprintf(message, ") \n");
-	  message = startOfMessage;
-	  writeToLogs("Info", message);
-
-	}
-      }
-
-
-      for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
-
-	if (freeChildren > 0) {
-	  // write to pipe newProcessToChild
-	  printf("freeChildren is %d, preparing to reuse child", freeChildren);
-	  //	  printf("from parent: printing before writing to pipe \n");
-	  /* write message start */
-	  close(newProcessToChild[0]);
-	  char tmpStr[strlen(processName) + 5];
-	  sprintf(tmpStr, "%s#%d!%d", processName, PIDs[counter], processLifeSpan);
-	  write(newProcessToChild[1], tmpStr, strlen(tmpStr) + 1);
-	  //free(tmpStr);
-	  /* write message end */
-	  //	  printf("from parent: done writing to pipe \n");
-
-	  //	  printf("decing freeChildren\n");
-
-	  freeChildren = freeChildren - 1;
-	}
-	
-	else {
-	  pid = fork();
-	  if (pid == 0) {
-      
-	    // child portion
-	    printf("Spawned A child for process: %s \n", processName);
-	    fclose(fp2);
-	    //monitor(processName, processLifeSpan);
-
-	    //waitAndKill(processLifeSpan, PIDs[counter]);
-	    dispatch(parentPID, processName, PIDs[counter], processLifeSpan);
-	    
-	    while(keepLooping == 1) {
-	      printf("staring dispatch \n");
-	      dispatch(parentPID, processName, -1, processLifeSpan);
-
-	    }
-
-	    
-	  }
-	  else if (pid == -1) {
-	    printf("error in forking. \n");
-	    exit(1);
-	  }
-	  else {
-	    numberOfChildren++;
-	    //printf("parent process pid=%d \n", getpid());
-	  }
-	  
-	} // spawning child end bracket
-
-      } // for loop end bracket
-     
-      free(PIDs);
-      free(message);
+      monitorProcess(processName, processLifeSpan);
+      //fclose(fp2);
 
     }// while loop for reading file
 
@@ -434,19 +451,16 @@ void readAndExecute() {
     printf("process we got are: \n");
 
     struct node * cursorNode = head;
-    printf("\n\n\n");
+    printf("*****\n");
     int i = 0;
     for (i = 1; i <= getSize(head); i++) {
-      printf("value:%s\n", cursorNode->value);
+      printf("value: %s\n", cursorNode->value);
       cursorNode = cursorNode->next;
     }
-
-
-
   }
 
   fclose(fp2);
-
+  freeList(head);
   printf("done with readAndExecute \n");
 
 
