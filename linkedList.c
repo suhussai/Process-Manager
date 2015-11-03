@@ -17,12 +17,13 @@
 
 
 struct node;
-struct node * init(char * headValue) {
+struct node * init(char * headValue, int headKey) {
 
   struct node * head = malloc(sizeof(struct node));
   //  char * headValue = malloc(strlen(value)*sizeof(value));
   head->value = malloc(strlen(headValue)*sizeof(headValue));
   strcpy(head->value, headValue);
+  head->key = headKey;
   //  head->value = headValue; 
   head->next = NULL;
 
@@ -42,7 +43,7 @@ int getSize(struct node * head) {
 }
 
 
-void addNode(struct node * head, char * value) {
+void addNode(struct node * head, char * value, int key) {
   struct node * currentNode = head;
   while (currentNode != NULL && currentNode->next != NULL) {
     currentNode = currentNode->next;
@@ -53,6 +54,7 @@ void addNode(struct node * head, char * value) {
   //  char * newNodeValue = malloc(strlen(value)*sizeof(value));
   newNode->value = malloc(strlen(value)*sizeof(value));
   strcpy(newNode->value, value);
+  newNode->key = key;
   //  newNode->value = newNodeValue; 
   currentNode->next = newNode;
   newNode->next = NULL;
