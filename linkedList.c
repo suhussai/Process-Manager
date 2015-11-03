@@ -140,6 +140,15 @@ int main() {
 
   printf("ping is located at location: %d", searchNodes(head, "ping"));
 
+  int i = 1;
+
+  struct node * cursorNode = head;
+  printf("\n\n\n");
+  for (i = 1; i < getSize(head); i++) {
+    printf("value:%s\n", cursorNode->value);
+    cursorNode = cursorNode->next;
+  }
+
 
   //  removeNode(head, "ping");
   //removeNode(head, "emacs");
