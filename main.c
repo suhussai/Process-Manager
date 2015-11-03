@@ -12,6 +12,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include "linkedList.h"
+
 
 void getDate(char * dateVar);
 void clearLogs();
@@ -39,7 +41,11 @@ struct sigaction sa;
 int rereadFromConfigFile = 1;
 int parentPid = 0;
 
+struct node * head;
+
 int main(int argc, char *argv[]) {
+
+  //  struct node * head;
 
   parentPid = getpid();
   printf("!!!!!!!Parent PID = %d\n", parentPid);
@@ -302,6 +308,16 @@ void readAndExecute() {
       printf("%s \n", processName);
       printf("%d \n", processLifeSpan);
       printf("freeChildren is %d \n", freeChildren);
+      printf("adding all  nodes \n");
+      
+      if (head) {
+	printf("%d adding node \n", getpid());
+	addNode(head, processName);
+      }
+      else {
+	printf("%d heading node \n", getpid());
+	head = init(processName);
+      }
       
       // convert processName into PIDs
       // pass PIDs, one by one, into a separate child
@@ -415,7 +431,16 @@ void readAndExecute() {
     //sleep(10);
     //kill(getpid(), SIGHUP);
     //check for processes 
-    
+    printf("process we got are: \n");
+
+    struct node * cursorNode = head;
+    printf("\n\n\n");
+    int i = 0;
+    for (i = 1; i <= getSize(head); i++) {
+      printf("value:%s\n", cursorNode->value);
+      cursorNode = cursorNode->next;
+    }
+
 
 
   }
