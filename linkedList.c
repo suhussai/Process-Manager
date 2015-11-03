@@ -43,7 +43,7 @@ int getSize(struct node * head) {
 }
 
 
-void addNode(struct node * head, char * value, int key) {
+void addNode(struct node * head, char * valueToAdd, int keyToAdd) {
   struct node * currentNode = head;
   while (currentNode != NULL && currentNode->next != NULL) {
     currentNode = currentNode->next;
@@ -52,9 +52,9 @@ void addNode(struct node * head, char * value, int key) {
   // we are at the last node
   struct node * newNode = malloc(sizeof(struct node));
   //  char * newNodeValue = malloc(strlen(value)*sizeof(value));
-  newNode->value = malloc(strlen(value)*sizeof(value));
-  strcpy(newNode->value, value);
-  newNode->key = key;
+  newNode->value = malloc(strlen(valueToAdd)*sizeof(valueToAdd));
+  strcpy(newNode->value, valueToAdd);
+  newNode->key = keyToAdd;
   //  newNode->value = newNodeValue; 
   currentNode->next = newNode;
   newNode->next = NULL;
@@ -62,16 +62,18 @@ void addNode(struct node * head, char * value, int key) {
 
 }
 
-void removeNode(struct node *head, char * valueToBeRemoved) {
+void removeNode(struct node *head, char * valueToBeRemoved, int keyToBeRemoved) {
   struct node * currentNode = head;
   struct node * previousNode = head;
   while (currentNode != NULL && currentNode->next != NULL &&
-	 strcmp(currentNode->value, valueToBeRemoved) != 0 ) {
+	 strcmp(currentNode->value, valueToBeRemoved) != 0 &&
+	 currentNode->key != keyToBeRemoved) {
     previousNode = currentNode;
     currentNode = currentNode->next;
   }
 
-  if (strcmp(currentNode->value, valueToBeRemoved) == 0) {
+  if (strcmp(currentNode->value, valueToBeRemoved) == 0 &&
+      currentNode->key == keyToBeRemoved) {
     previousNode->next = currentNode->next;    
     free(currentNode->value);
     free(currentNode);  
@@ -82,7 +84,7 @@ void removeNode(struct node *head, char * valueToBeRemoved) {
   
 }
 
-int searchNodes(struct node * head, char * valueToSearch) {
+int searchNodes(struct node * head, char * valueToSearch, int keyToSearch) {
   // returns location of nodes
   // if it exists, otherwise
   // it returns -1
@@ -90,13 +92,15 @@ int searchNodes(struct node * head, char * valueToSearch) {
   struct node * currentNode = head;
   int location = 0;
   while (currentNode != NULL && currentNode->next != NULL &&
-	 strcmp(currentNode->value,valueToSearch) != 0) {
+	 strcmp(currentNode->value,valueToSearch) != 0 &&
+	 currentNode->key != keyToSearch) {
     printf("value is %s\n", currentNode->value);
     currentNode = currentNode->next;
     location++;
   }
 
-  if (strcmp(currentNode->value,valueToSearch) == 0) {
+  if (strcmp(currentNode->value,valueToSearch) == 0 &&
+      currentNode->key == keyToSearch) {
     return location + 1;
   }
   else {
@@ -127,41 +131,42 @@ void freeList(struct node * head) {
 
 /*   struct node * head = malloc(sizeof(struct node)); */
 /*   head->next = NULL; */
-/*   char * process = malloc(8);  */
+/*   char * process = malloc(8); */
 /*   strcpy(process,"firefox"); */
 /*   head->value = process; */
+/*   head->key = 0; */
 /*   printf("size before head: %d \n", getSize(head)); */
 /*   head->value = process; */
 /*   printf("size after head: %d \n", getSize(head)); */
 
-/*   addNode(head, "emacs"); */
+/*   addNode(head, "emacs", 2); */
 /*   printf("size after adding is: %d \n", getSize(head)); */
 
 
-/*   addNode(head, "ping"); */
+/*   addNode(head, "ping", 3); */
 /*   printf("size after adding is: %d \n", getSize(head)); */
 
-/*   addNode(head, "ping2"); */
+/*   addNode(head, "ping2", 4); */
 /*   printf("size after adding is: %d \n", getSize(head)); */
 
 
-/*   addNode(head, "ping3"); */
+/*   addNode(head, "ping3", 5); */
 /*   printf("size after adding is: %d \n", getSize(head)); */
 
-/*   printf("ping is located at location: %d", searchNodes(head, "ping")); */
+/*   printf("ping is located at location: %d", searchNodes(head, "ping", 3)); */
 
 /*   int i = 1; */
 
 /*   struct node * cursorNode = head; */
 /*   printf("\n\n\n"); */
 /*   for (i = 1; i < getSize(head); i++) { */
-/*     printf("value:%s\n", cursorNode->value); */
+/*     printf("value:%s, key=%d\n", cursorNode->value, cursorNode->key); */
 /*     cursorNode = cursorNode->next; */
 /*   } */
 
 
 /*   //  removeNode(head, "ping"); */
-/*   //removeNode(head, "emacs"); */
+/*   removeNode(head, "emacs", 2); */
 /*   printf("size after removing is: %d \n", getSize(head)); */
 
 

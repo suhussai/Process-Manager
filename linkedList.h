@@ -13,8 +13,8 @@ struct node {
 struct node * init(char *, int);
 int getSize(struct node * );
 void addNode(struct node *, char *, int);
-void removeNode(struct node *, char *);
-int searchNodes(struct node *, char *);
+void removeNode(struct node *, char *, int);
+int searchNodes(struct node *, char *, int);
 void freeList(struct node *);
 
 #endif
