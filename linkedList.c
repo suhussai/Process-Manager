@@ -12,12 +12,27 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include "linkedList.h"
+
+
 
 struct node {
   char * value;
   struct node * next;
 };
 
+struct node * init(char * headValue) {
+
+  struct node * head = malloc(sizeof(struct node));
+  //  char * headValue = malloc(strlen(value)*sizeof(value));
+  head->value = malloc(strlen(headValue)*sizeof(headValue));
+  strcpy(head->value, headValue);
+  //  head->value = headValue; 
+  head->next = NULL;
+
+  return head;
+  
+}
 
 int getSize(struct node * head) {
   struct node * currentNode = head;
@@ -104,60 +119,57 @@ void freeList(struct node * head) {
     free(currentNode);
     currentNode = nextNode;
   }
-
-  //  free(currentNode);
-  //free(currentNode->value);
   
   
 }
 
-int main() {
+/* int main() { */
 
-  printf("beginning \n");
+/*   printf("beginning \n"); */
 
-  struct node * head = malloc(sizeof(struct node));
-  head->next = NULL;
-  char * process = malloc(8); 
-  strcpy(process,"firefox");
-  head->value = process;
-  printf("size before head: %d \n", getSize(head));
-  head->value = process;
-  printf("size after head: %d \n", getSize(head));
+/*   struct node * head = malloc(sizeof(struct node)); */
+/*   head->next = NULL; */
+/*   char * process = malloc(8);  */
+/*   strcpy(process,"firefox"); */
+/*   head->value = process; */
+/*   printf("size before head: %d \n", getSize(head)); */
+/*   head->value = process; */
+/*   printf("size after head: %d \n", getSize(head)); */
 
-  addNode(head, "emacs");
-  printf("size after adding is: %d \n", getSize(head));
-
-
-  addNode(head, "ping");
-  printf("size after adding is: %d \n", getSize(head));
-
-  addNode(head, "ping2");
-  printf("size after adding is: %d \n", getSize(head));
+/*   addNode(head, "emacs"); */
+/*   printf("size after adding is: %d \n", getSize(head)); */
 
 
-  addNode(head, "ping3");
-  printf("size after adding is: %d \n", getSize(head));
+/*   addNode(head, "ping"); */
+/*   printf("size after adding is: %d \n", getSize(head)); */
 
-  printf("ping is located at location: %d", searchNodes(head, "ping"));
-
-  int i = 1;
-
-  struct node * cursorNode = head;
-  printf("\n\n\n");
-  for (i = 1; i < getSize(head); i++) {
-    printf("value:%s\n", cursorNode->value);
-    cursorNode = cursorNode->next;
-  }
+/*   addNode(head, "ping2"); */
+/*   printf("size after adding is: %d \n", getSize(head)); */
 
 
-  //  removeNode(head, "ping");
-  //removeNode(head, "emacs");
-  printf("size after removing is: %d \n", getSize(head));
+/*   addNode(head, "ping3"); */
+/*   printf("size after adding is: %d \n", getSize(head)); */
+
+/*   printf("ping is located at location: %d", searchNodes(head, "ping")); */
+
+/*   int i = 1; */
+
+/*   struct node * cursorNode = head; */
+/*   printf("\n\n\n"); */
+/*   for (i = 1; i < getSize(head); i++) { */
+/*     printf("value:%s\n", cursorNode->value); */
+/*     cursorNode = cursorNode->next; */
+/*   } */
 
 
-  freeList(head);
-  printf("done \n");
-  return 0;
-}
+/*   //  removeNode(head, "ping"); */
+/*   //removeNode(head, "emacs"); */
+/*   printf("size after removing is: %d \n", getSize(head)); */
+
+
+/*   freeList(head); */
+/*   printf("done \n"); */
+/*   return 0; */
+/* } */
 
 
