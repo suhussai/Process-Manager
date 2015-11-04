@@ -129,19 +129,15 @@ void freeList(struct node * head) {
 
 /*   printf("beginning \n"); */
 
-/*   struct node * head = malloc(sizeof(struct node)); */
-/*   head->next = NULL; */
-/*   char * process = malloc(8); */
-/*   strcpy(process,"firefox"); */
-/*   head->value = process; */
-/*   head->key = 0; */
-/*   printf("size before head: %d \n", getSize(head)); */
-/*   head->value = process; */
-/*   printf("size after head: %d \n", getSize(head)); */
+/*   struct node * head = init("firefox", 0); */
+/*   struct node * otherHead =  init("lame", 2123120); */
 
 /*   addNode(head, "emacs", 2); */
 /*   printf("size after adding is: %d \n", getSize(head)); */
 
+
+/*   addNode(otherHead, "emacs", 2123); */
+/*   printf("size after adding is: %d \n", getSize(otherHead)); */
 
 /*   addNode(head, "ping", 3); */
 /*   printf("size after adding is: %d \n", getSize(head)); */
@@ -152,17 +148,25 @@ void freeList(struct node * head) {
 
 /*   addNode(head, "ping3", 5); */
 /*   printf("size after adding is: %d \n", getSize(head)); */
-
+  
 /*   printf("ping is located at location: %d", searchNodes(head, "ping", 3)); */
 
 /*   int i = 1; */
 
 /*   struct node * cursorNode = head; */
 /*   printf("\n\n\n"); */
-/*   for (i = 1; i < getSize(head); i++) { */
+/*   for (i = 0; i < getSize(head); i++) { */
 /*     printf("value:%s, key=%d\n", cursorNode->value, cursorNode->key); */
 /*     cursorNode = cursorNode->next; */
 /*   } */
+
+/*   cursorNode = otherHead; */
+/*   printf("\n\n\n"); */
+/*   for (i = 0; i < getSize(otherHead); i++) { */
+/*     printf("value:%s, key=%d\n", cursorNode->value, cursorNode->key); */
+/*     cursorNode = cursorNode->next; */
+/*   } */
+
 
 
 /*   //  removeNode(head, "ping"); */
