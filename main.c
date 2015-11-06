@@ -44,7 +44,7 @@ int rereadFromConfigFile = 1;
 int parentPid = 0;
 struct node * processList;
 struct node * monitoredPIDs;
-
+struct node * childPIDs;
 int messagesFromChildren = 0;
 
 void monitorProcess(char * processName, int processLifeSpan) {
@@ -168,15 +168,27 @@ void monitorProcess(char * processName, int processLifeSpan) {
 	  printf("%d child : starting dispatch \n", getpid());
 	  dispatch(parentPID, processName, -1, processLifeSpan);
 	}
-
-	    
+	
+	
+	free(PIDs);
+	free(message);
+	printf("child dying....\n");
+	exit(0);
+	
       }
-      else if (pid == -1) {
+      else if (pid < 0) {
 	printf("error in forking. \n");
-	exit(1);
+	exit(0);
       }
       else {
 	numberOfChildren++;
+	if (childPIDs){
+	  addNode(childPIDs, " ", pid);
+	}
+	else {
+	  childPIDs = init(" ", pid);
+	}
+
 	//printf("parent process pid=%d \n", getpid());
       }
 	  
@@ -196,16 +208,23 @@ int main(int argc, char *argv[]) {
 
   parentPid = getpid();
   printf("!!!!!!!Parent PID = %d\n", parentPid);
-  sa.sa_handler = sig_handler;
-  // http://www.linuxjournal.com/files/linuxjournal.com/linuxjournal/articles/063/6391/6391l3.html
-  // http://stackoverflow.com/questions/6343871/about-the-delivery-of-standard-signals
+  /* sa.sa_handler = sig_handler; */
+  /* // http://www.linuxjournal.com/files/linuxjournal.com/linuxjournal/articles/063/6391/6391l3.html */
+  /* // http://stackoverflow.com/questions/6343871/about-the-delivery-of-standard-signals */
 
-  sa.sa_flags = SA_SIGINFO;
-  int errorSig = sigaction(SIGHUP, &sa, NULL);
-  if (errorSig == -1) {
-    printf("error in seting signal");
-    exit(0);
-  }
+  /* sa.sa_flags = SA_SIGINFO; */
+  /* int errorSig = sigaction(SIGHUP, &sa, NULL); */
+  /* if (errorSig == -1) { */
+  /*   printf("error in seting signal"); */
+  /*   exit(0); */
+  /* } */
+
+  /* errorSig = sigaction(SIGINT, &sa, NULL); */
+  /* if (errorSig == -1) { */
+  /*   printf("error in seting signal"); */
+  /*   exit(0); */
+  /* } */
+
 
   printf("set handlers\n");
   
@@ -245,32 +264,47 @@ void sig_handler(int signum) {
     rereadFromConfigFile = 1;
     break;
   case 2:
-    for (i = 0; i < numberOfChildren; i++) {
-  
-      //      printf("from parent: printing before writing to pipe \n");
-      /* write message start */
-      //close(newProcessToChild[0]);
-      char tmpStr2[2];
-      strcpy(tmpStr2,"-1");
-      tmpStr2[2] = '\0';
-      //  sprintf(tmpStr2, "%s", processName);
-      write(newProcessToChild[1], tmpStr2, 62);
-      /* write message end */
-      //      printf("from parent: done writing to pipe \n");
+    printf("caught sigint, i am %d and parent is %d\n", getpid(), parentPid);
+    if (getpid() == parentPid) {
+      printf("parent receieved sigint, signalling children...\n");
+
+      struct node * currentNode = childPIDs;
+      for (i = 0; i < numberOfChildren; i++) {
+	printf("sending sigint to %d\n",currentNode->key); 
+	kill(SIGINT, currentNode->key);
+	currentNode = currentNode->next;
+
+	/// no longer sending -1... sheesh 
+	/* //      printf("from parent: printing before writing to pipe \n"); */
+	/* /\* write message start *\/ */
+	/* //close(newProcessToChild[0]); */
+	/* char tmpStr2[2]; */
+	/* strcpy(tmpStr2,"-1"); */
+	/* tmpStr2[2] = '\0'; */
+	/* //  sprintf(tmpStr2, "%s", processName); */
+	/* write(newProcessToChild[1], tmpStr2, 62); */
+	/* /\* write message end *\/ */
+	/* //      printf("from parent: done writing to pipe \n"); */
       
+      }
+      
+
+      char * message;
+      message = malloc(300);
+
+      //printf("from parent %d \n", getpid());
+      snprintf(message, 290, "Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled);
+      writeToLogs("Info", message);
+      //printf("%s", message);
+
+      free(message);
+
+      printf("According to us, we got a kill count of %d \n", totalProcsKilled);
+
     }
-    
-    char * message;
-    message = malloc(300);
-
-    //printf("from parent %d \n", getpid());
-    snprintf(message, 290, "Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled);
-    writeToLogs("Info", message);
-    printf("%s", message);
-
-    free(message);
-
-    printf("According to us, we got a kill count of %d \n", totalProcsKilled);
+    else {
+      printf("recevied sigint in child, setting keepLooping to 0\n");
+    }
 
     keepLooping = 0;
 
@@ -401,9 +435,10 @@ void dispatch(int parentPid, char * processName, int processPID, int processLife
   // pipe and transfer info to funcion monitor
   //  int n = 0;
   /* read message start */
-  char * pipeBuffer= malloc(62);
-  char * newProcessName;
+
   if (processPID == -1 ) {
+    char * pipeBuffer= malloc(62);
+    char * newProcessName;
     // if we need to get process id
     // we look to getting it from the pipe
     //    printf("from child: preparing to read messages \n");
@@ -427,8 +462,8 @@ void dispatch(int parentPid, char * processName, int processPID, int processLife
       processLifeSpan = 0;
       int len = 0;
       processPID = 0;
-
-      len = strchr(pipeBuffer,'#') - pipeBuffer;
+      
+      len = abs(strchr(pipeBuffer,'#') - pipeBuffer);
       newProcessName = malloc(len+1);
       memcpy(newProcessName, pipeBuffer, len);
       newProcessName[len] = '\0'; 
@@ -436,43 +471,61 @@ void dispatch(int parentPid, char * processName, int processPID, int processLife
       processPID = atoi(pipeBuffer+1);
       processLifeSpan = atoi(strchr(pipeBuffer,'!')+1);      
     }
+
+
+    if (waitAndKill(processLifeSpan, processPID) > 0) {
+      //    printf("from child: sending log info  to pipe \n");
+      /* write message start */
+      close(killCountPipe[0]);
+      char tmpStr[62];
+
+      sprintf(tmpStr, "%-20s#%20d!%20d", newProcessName, processPID, processLifeSpan);
+      //    printf("child %d writing this to pipe: %s \n", getpid(), tmpStr);
+      int w = write(killCountPipe[1], tmpStr, 62);
+      while (w != 62) {
+	w = write(killCountPipe[1], tmpStr, 62);
+	printf("%s\n",strerror(errno));
+      }
+      printf("child %d w was %d \n",getpid(), w);
+
+      // signal parent
+      printf("NOT SIGNALLING PARENT \n");
+      //kill(parentPid,SIGUSR1);
+    }
+
+    free(newProcessName);
+    free(pipeBuffer);
+    //exit(0);
+
+
     
   } 
   else {
-    newProcessName = malloc(strlen(processName));
-    strcpy(newProcessName, processName);
-    //newProcessName = processName;
-  }
 
-  // default action
-  // either we've retrieved processName, processPID, processLifeSpan
-  // from the pipe or
-  // we were given it in the argument of the function when it was called
 
-  if (waitAndKill(processLifeSpan, processPID) > 0) {
-    //    printf("from child: sending log info  to pipe \n");
-    /* write message start */
-    close(killCountPipe[0]);
-    char tmpStr[62];
+    if (waitAndKill(processLifeSpan, processPID) > 0) {
+      //    printf("from child: sending log info  to pipe \n");
+      /* write message start */
+      close(killCountPipe[0]);
+      char tmpStr[62];
 
-    sprintf(tmpStr, "%-20s#%20d!%20d", newProcessName, processPID, processLifeSpan);
-    //    printf("child %d writing this to pipe: %s \n", getpid(), tmpStr);
-    int w = write(killCountPipe[1], tmpStr, 62);
-    while (w != 62) {
-      w = write(killCountPipe[1], tmpStr, 62);
-      printf("%s\n",strerror(errno));
+      sprintf(tmpStr, "%-20s#%20d!%20d", processName, processPID, processLifeSpan);
+      //    printf("child %d writing this to pipe: %s \n", getpid(), tmpStr);
+      int w = write(killCountPipe[1], tmpStr, 62);
+      while (w != 62) {
+	w = write(killCountPipe[1], tmpStr, 62);
+	printf("%s\n",strerror(errno));
+      }
+      printf("child %d w was %d \n",getpid(), w);
+
+      // signal parent
+      printf("NOT SIGNALLING PARENT \n");
+      //kill(parentPid,SIGUSR1);
     }
-    printf("child %d w was %d \n",getpid(), w);
 
-    // signal parent
-    printf("NOT SIGNALLING PARENT \n");
-    //kill(parentPid,SIGUSR1);
   }
   
   
-  free(newProcessName);
-  free(pipeBuffer);
-  //exit(0);
   
 }
 
@@ -514,6 +567,11 @@ void readAndExecute() {
 
 
     if (rereadFromConfigFile == 1) {
+      if (processList) {
+	freeList(processList); // free it in case it is still set
+	processList = NULL;
+      }
+      printf("reread config file\n");
       fp2 = fopen(fileName,"r");
       if (fp2 == NULL) { 
 	clearLogs();
@@ -526,6 +584,7 @@ void readAndExecute() {
     printf("reread = %d\n", rereadFromConfigFile);
     while ((read1 = getline(&line, &len, fp2)) != -1 && rereadFromConfigFile == 1) {
       printf("from parent: starting main while \n ");
+
     
       char * tmp = strchr(line, delimiter);
       processLifeSpan = atoi(tmp);
@@ -612,6 +671,7 @@ void readAndExecute() {
   fclose(fp2);
   freeList(processList);
   freeList(monitoredPIDs);
+  freeList(childPIDs);
   printf("done with readAndExecute \n");
 
 
@@ -704,15 +764,16 @@ void getPIDs(char * processName, int * PIDs, int numberOfPIDs) {
     //printf("%s \n", command);
 
     getPIDfp = popen(getPIDcommand, "r");
+    //    popen.wait();
     if (getPIDfp != NULL) {
       fgets(getPIDbuffer, 15, getPIDfp);
       PIDs[counter] = atoi(getPIDbuffer);
       //printf("%s process has PID %d \n", processName, PIDs[counter]);
     }
+    pclose(getPIDfp);
     
   }
 
-  pclose(getPIDfp);
   free(getPIDbuffer);
   free(getPIDcommand);
   
