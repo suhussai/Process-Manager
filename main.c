@@ -7,13 +7,14 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include "memwatch.h"
 #include <fcntl.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
 #include <time.h>
+#include <ctype.h> // for isspace() function
 #include "linkedList.h"
+#include "memwatch.h"
 
 
 void getDate(char * dateVar);
@@ -43,6 +44,7 @@ int rereadFromConfigFile = 1;
 int parentPid = 0;
 struct node * processList;
 struct node * monitoredPIDs;
+
 int messagesFromChildren = 0;
 
 void monitorProcess(char * processName, int processLifeSpan) {
@@ -346,7 +348,7 @@ void updateKillCount() {
   /*   n = read(killCountPipe[0], pipeBuffer, 63);     */
   /* } */
   
-  printf("results of updating kill: %s\n", pipeBuffer);
+  //  printf("results of updating kill: %s\n", pipeBuffer);
   //  printf("parent: %s is what we got and n = %d \n", pipeBuffer, n);
 
 
@@ -454,7 +456,7 @@ void dispatch(int parentPid, char * processName, int processPID, int processLife
     char tmpStr[62];
 
     sprintf(tmpStr, "%-20s#%20d!%20d", newProcessName, processPID, processLifeSpan);
-    printf("child %d writing this to pipe: %s \n", getpid(), tmpStr);
+    //    printf("child %d writing this to pipe: %s \n", getpid(), tmpStr);
     int w = write(killCountPipe[1], tmpStr, 62);
     while (w != 62) {
       w = write(killCountPipe[1], tmpStr, 62);
