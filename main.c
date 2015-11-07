@@ -9,13 +9,24 @@
 #include "memwatch.h" // for proper memory use checks
 
 
-void getDate(char * dateVar);
-void clearLogs();
-
 int totalProcsKilled = 0;
 int freeChildren = 0;
 char * fileName = NULL;
 int keepLooping = 1; // 1 = true, 0 = false
+int newProcessToChild[2]; // p2c[0] gets written to on parent, p2c[1] gets read on child
+int killCountPipe[2]; // killCountPipe[0] gets written to on child, killCountPipe[1] gets read on parent
+int numberOfChildren = 0;
+struct sigaction sa;
+int rereadFromConfigFile = 1;
+int parentPid = 0;
+struct node * processList;
+struct node * monitoredPIDs;
+struct node * childPIDs;
+int messagesFromChildren = 0;
+
+
+void getDate(char * dateVar);
+void clearLogs();
 void writeToLogs(char * logLevel, char * message);
 int countNumberOfPIDs(int PID);
 void getPIDs(char * processName, int * PIDs, int numberOfPIDs);
@@ -28,173 +39,7 @@ void sig_handler(int signum);
 void sigint_handler(int signum);
 void readAndExecute();
 void dispatch(int parentPID, char * processName, int processPID, int processLifeSpan);
-int newProcessToChild[2]; // p2c[0] gets written to on parent, p2c[1] gets read on child
-int killCountPipe[2]; // killCountPipe[0] gets written to on child, killCountPipe[1] gets read on parent
-int numberOfChildren = 0;
-struct sigaction sa;
-int rereadFromConfigFile = 1;
-int parentPid = 0;
-struct node * processList;
-struct node * monitoredPIDs;
-struct node * childPIDs;
-int messagesFromChildren = 0;
-
-void monitorProcess(char * processName, int processLifeSpan) {
-  // takes processName and lifeSpan 
-  // converts processName to PIDs 
-  // and monitors each PID by either 
-  // spawning a child for that process or 
-  // or reusing a "unbusy" child depending
-  // on the global freeChildren variable.
-  
-
-  printf("startin monitor Process for %s \n", processName);
-  char * message;
-  char * startOfMessage;
-  int * PIDs;
-  int counter = 0;
-  int pid = 0;
-  int parentPID = getpid();
-  
-  int numberOfPIDs = 0;
-
-  // check to make sure process "processName" is still active 
-  if ((numberOfPIDs = getNumberOfPIDsForProcess(processName))  < 1) {
-    char * message;
-    message = malloc(300);
-
-    snprintf(message, 290, "No '%s' processes found. \n", processName);
-    writeToLogs("Info", message);
-      
-    free(message);
-    return;
-  }
-      
-  printf("we are parent: %d \n", getpid());
-  printf("for %d %s we have  the number of PIDs is equal to %d \n", getpid(), processName, numberOfPIDs);
-  PIDs = malloc(numberOfPIDs + 100);
-  message = malloc(300);
-  startOfMessage = message;
-
-  getPIDs(processName, PIDs, numberOfPIDs);
-
-  // print out messages to logs regarding which
-  // processes are being monitored
-  for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
-
-    if (monitoredPIDs != NULL && searchNodes(monitoredPIDs, processName, PIDs[counter]) != -1) {
-      // only call monitor process if 
-      // process has more than 0 pids active
-      // and it is not in monitoredPIDs linked list
-      // ie it is not being monitored already
-      printf("process %s with pid %d is already being monitored \n", processName, PIDs[counter]);
-      continue;
-    }
-
-
-    // during first loop
-    if (counter == 0) {
-      message += sprintf(message, "Initializing monitoring of process '%s' (%d", processName, PIDs[counter]);
-    }
-    // default loop
-    else {
-      message += sprintf(message, ", %d", PIDs[counter]);
-    }
-
-    // during last loop
-    if (counter + 1 == numberOfPIDs) {
-      message += sprintf(message, ") \n");
-      message = startOfMessage;
-      writeToLogs("Info", message);
-
-    }
-  }
-
-
-  for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
-
-    if (monitoredPIDs != NULL && searchNodes(monitoredPIDs, processName, PIDs[counter]) != -1) {
-      // only call monitor process if 
-      // process has more than 0 pids active
-      // and it is not in monitoredPIDs linked list
-      // ie it is not being monitored already
-      printf("process %s with pid %d is already being monitored \n", processName, PIDs[counter]);
-      continue;
-    }
-
-
-    printf("adding pid %d to list \n", PIDs[counter]);
-    if (monitoredPIDs) {
-      printf("ADDDING  pid %d to list! \n", PIDs[counter]);
-      addNode(monitoredPIDs, processName, PIDs[counter]);
-    }
-    else {
-      printf("initialzing pid %d to list!\n", PIDs[counter]);
-      monitoredPIDs = init(processName, PIDs[counter]);
-    }
-    if (freeChildren > 0) {
-      // write to pipe newProcessToChild
-      printf("freeChildren is %d, preparing to reuse child for %s pid %d\n", freeChildren, processName, PIDs[counter]);
-      //	  printf("from parent: printing before writing to pipe \n");
-      /* write message start */
-      
-      // close(newProcessToChild[0]);
-      char tmpStr[62];
-      sprintf(tmpStr, "%-20s#%20d!%20d", processName, PIDs[counter], processLifeSpan);
-      write(newProcessToChild[1], tmpStr, 62);
-
-
-      printf("using children\n");
-      freeChildren = freeChildren - 1;
-    }
-	
-    else {
-      pid = fork();
-      if (pid == 0) {
-      
-	// child portion
-	printf("Spawned A child %d for process: %s, pid %d \n",getpid(),  processName, PIDs[counter]);
-	dispatch(parentPID, processName, PIDs[counter], processLifeSpan);
-	    
-	while(keepLooping == 1) {
-	  printf("%d child : starting dispatch \n", getpid());
-	  dispatch(parentPID, processName, -1, processLifeSpan);
-	}
-	
-	
-	free(PIDs);
-	free(message);
-	printf("child dying....\n");
-	exit(0);
-	
-      }
-      else if (pid < 0) {
-	printf("error in forking. \n");
-	exit(0);
-      }
-      else {
-	numberOfChildren++;
-	if (childPIDs){
-	  addNode(childPIDs, " ", pid);
-	}
-	else {
-	  childPIDs = init(" ", pid);
-	}
-
-	//printf("parent process pid=%d \n", getpid());
-      }
-	  
-    } // spawning child end bracket
-
-  } // for loop end bracket
-
-
-
-  free(PIDs);
-  free(message);
-     
-
-}
+void monitorProcess(char * processName, int processLifeSpan);
 
 int main(int argc, char *argv[]) {
 
@@ -520,6 +365,163 @@ void dispatch(int parentPid, char * processName, int processPID, int processLife
   
   
 }
+void monitorProcess(char * processName, int processLifeSpan) {
+  // takes processName and lifeSpan 
+  // converts processName to PIDs 
+  // and monitors each PID by either 
+  // spawning a child for that process or 
+  // or reusing a "unbusy" child depending
+  // on the global freeChildren variable.
+  
+
+  printf("startin monitor Process for %s \n", processName);
+  char * message;
+  char * startOfMessage;
+  int * PIDs;
+  int counter = 0;
+  int pid = 0;
+  int parentPID = getpid();
+  
+  int numberOfPIDs = 0;
+
+  // check to make sure process "processName" is still active 
+  if ((numberOfPIDs = getNumberOfPIDsForProcess(processName))  < 1) {
+    char * message;
+    message = malloc(300);
+
+    snprintf(message, 290, "No '%s' processes found. \n", processName);
+    writeToLogs("Info", message);
+      
+    free(message);
+    return;
+  }
+      
+  printf("we are parent: %d \n", getpid());
+  printf("for %d %s we have  the number of PIDs is equal to %d \n", getpid(), processName, numberOfPIDs);
+  PIDs = malloc(numberOfPIDs + 100);
+  message = malloc(300);
+  startOfMessage = message;
+
+  getPIDs(processName, PIDs, numberOfPIDs);
+
+  // print out messages to logs regarding which
+  // processes are being monitored
+  for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
+
+    if (monitoredPIDs != NULL && searchNodes(monitoredPIDs, processName, PIDs[counter]) != -1) {
+      // only call monitor process if 
+      // process has more than 0 pids active
+      // and it is not in monitoredPIDs linked list
+      // ie it is not being monitored already
+      printf("process %s with pid %d is already being monitored \n", processName, PIDs[counter]);
+      continue;
+    }
+
+
+    // during first loop
+    if (counter == 0) {
+      message += sprintf(message, "Initializing monitoring of process '%s' (%d", processName, PIDs[counter]);
+    }
+    // default loop
+    else {
+      message += sprintf(message, ", %d", PIDs[counter]);
+    }
+
+    // during last loop
+    if (counter + 1 == numberOfPIDs) {
+      message += sprintf(message, ") \n");
+      message = startOfMessage;
+      writeToLogs("Info", message);
+
+    }
+  }
+
+
+  for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
+
+    if (monitoredPIDs != NULL && searchNodes(monitoredPIDs, processName, PIDs[counter]) != -1) {
+      // only call monitor process if 
+      // process has more than 0 pids active
+      // and it is not in monitoredPIDs linked list
+      // ie it is not being monitored already
+      printf("process %s with pid %d is already being monitored \n", processName, PIDs[counter]);
+      continue;
+    }
+
+
+    printf("adding pid %d to list \n", PIDs[counter]);
+    if (monitoredPIDs) {
+      printf("ADDDING  pid %d to list! \n", PIDs[counter]);
+      addNode(monitoredPIDs, processName, PIDs[counter]);
+    }
+    else {
+      printf("initialzing pid %d to list!\n", PIDs[counter]);
+      monitoredPIDs = init(processName, PIDs[counter]);
+    }
+    if (freeChildren > 0) {
+      // write to pipe newProcessToChild
+      printf("freeChildren is %d, preparing to reuse child for %s pid %d\n", freeChildren, processName, PIDs[counter]);
+      //	  printf("from parent: printing before writing to pipe \n");
+      /* write message start */
+      
+      // close(newProcessToChild[0]);
+      char tmpStr[62];
+      sprintf(tmpStr, "%-20s#%20d!%20d", processName, PIDs[counter], processLifeSpan);
+      write(newProcessToChild[1], tmpStr, 62);
+
+
+      printf("using children\n");
+      freeChildren = freeChildren - 1;
+    }
+	
+    else {
+      pid = fork();
+      if (pid == 0) {
+      
+	// child portion
+	printf("Spawned A child %d for process: %s, pid %d \n",getpid(),  processName, PIDs[counter]);
+	dispatch(parentPID, processName, PIDs[counter], processLifeSpan);
+	    
+	while(keepLooping == 1) {
+	  printf("%d child : starting dispatch \n", getpid());
+	  dispatch(parentPID, processName, -1, processLifeSpan);
+	}
+	
+	
+	free(PIDs);
+	free(message);
+	printf("child dying....\n");
+	exit(0);
+	
+      }
+      else if (pid < 0) {
+	printf("error in forking. \n");
+	exit(0);
+      }
+      else {
+	numberOfChildren++;
+	if (childPIDs){
+	  addNode(childPIDs, " ", pid);
+	}
+	else {
+	  childPIDs = init(" ", pid);
+	}
+
+	//printf("parent process pid=%d \n", getpid());
+      }
+	  
+    } // spawning child end bracket
+
+  } // for loop end bracket
+
+
+
+  free(PIDs);
+  free(message);
+     
+
+}
+
 
 
 void readAndExecute() {
