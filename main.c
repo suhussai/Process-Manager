@@ -44,24 +44,7 @@ void monitorProcess(char * processName, int processLifeSpan);
 int main(int argc, char *argv[]) {
 
   parentPid = getpid();
-  printf("!!!!!!!Parent PID = %d\n", parentPid);
-  /* sa.sa_handler = sig_handler; */
-  /* // http://www.linuxjournal.com/files/linuxjournal.com/linuxjournal/articles/063/6391/6391l3.html */
-  /* // http://stackoverflow.com/questions/6343871/about-the-delivery-of-standard-signals */
-
-  /* sa.sa_flags = SA_SIGINFO; */
-  /* int errorSig = sigaction(SIGHUP, &sa, NULL); */
-  /* if (errorSig == -1) { */
-  /*   printf("error in seting signal"); */
-  /*   exit(0); */
-  /* } */
-
-  /* errorSig = sigaction(SIGINT, &sa, NULL); */
-  /* if (errorSig == -1) { */
-  /*   printf("error in seting signal"); */
-  /*   exit(0); */
-  /* } */
-
+  printf("Parent PID = %d\n", parentPid);
 
   printf("set handlers\n");
   
@@ -109,34 +92,16 @@ void sig_handler(int signum) {
       for (i = 0; i < numberOfChildren; i++) {
 	printf("sending sigint to %d\n",currentNode->key); 
 	kill(SIGINT, currentNode->key);
-	currentNode = currentNode->next;
-
-	/// no longer sending -1... sheesh 
-	/* //      printf("from parent: printing before writing to pipe \n"); */
-	/* /\* write message start *\/ */
-	/* //close(newProcessToChild[0]); */
-	/* char tmpStr2[2]; */
-	/* strcpy(tmpStr2,"-1"); */
-	/* tmpStr2[2] = '\0'; */
-	/* //  sprintf(tmpStr2, "%s", processName); */
-	/* write(newProcessToChild[1], tmpStr2, 62); */
-	/* /\* write message end *\/ */
-	/* //      printf("from parent: done writing to pipe \n"); */
-      
+	currentNode = currentNode->next;      
       }
       
-
       char * message;
       message = malloc(300);
 
-      //printf("from parent %d \n", getpid());
       snprintf(message, 290, "Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled);
       writeToLogs("Info", message);
-      //printf("%s", message);
 
       free(message);
-
-      printf("According to us, we got a kill count of %d \n", totalProcsKilled);
 
     }
     else {
@@ -207,22 +172,6 @@ void updateKillCount() {
   int processLifeSpan = 0;
 
 
- 
-  //  int n = 0;
-  
-  /* if (read(killCountPipe[0], pipeBuffer, 63) <= 0) { */
-  /*   printf("found nothing on killCount pipe, returning\n"); */
-  /*   return; */
-  /* } */
-  
-  /* while(n == 0) { */
-  /*   n = read(killCountPipe[0], pipeBuffer, 63);     */
-  /* } */
-  
-  //  printf("results of updating kill: %s\n", pipeBuffer);
-  //  printf("parent: %s is what we got and n = %d \n", pipeBuffer, n);
-
-
   len = strchr(pipeBuffer,'#') - pipeBuffer;
   processName = malloc(len+1);
   strncpy(processName, pipeBuffer, len);
@@ -242,7 +191,6 @@ void updateKillCount() {
   printf("pid: %d \n", PID);
 
 
-
   if (searchNodes(monitoredPIDs, newP, PID) != -1) {
     printf("NOT REALLYremoving pid that was killed.\n");
     //removeNode(monitoredPIDs, newP, PID);    
@@ -257,14 +205,8 @@ void updateKillCount() {
 
   free(tmpBuffer);
   free(inputBuffer);
-  //free(pipeBuffer);
-  free(processName);
-  //  printf("!!!!!!!!!!!!!!!!incrementing freeChildren\n");  
-  //printf("%d freeChildren is %d\n", getpid(), freeChildren);
-  
-  freeChildren = freeChildren + 1;
-  //printf("%d before freeChildren is %d\n", getpid(), freeChildren);
-  
+  free(processName);  
+  freeChildren = freeChildren + 1;  
 }
 
 void dispatch(int parentPid, char * processName, int processPID, int processLifeSpan) {
@@ -275,6 +217,7 @@ void dispatch(int parentPid, char * processName, int processPID, int processLife
 
   if (processPID == -1 ) {
     char * pipeBuffer= malloc(62);
+    char * originalPipeBufferPointer = pipeBuffer;
     char * newProcessName;
     // if we need to get process id
     // we look to getting it from the pipe
@@ -282,9 +225,6 @@ void dispatch(int parentPid, char * processName, int processPID, int processLife
 
     close(newProcessToChild[1]);
     read(newProcessToChild[0], pipeBuffer, 62);
-    //    printf("from child: %s is what we got and n = %d \n", pipeBuffer, n);
-    /* read message end */
-    //    printf("from child: finished reading messages \n");
 
     // after we've retrieved info from pipe
     // check if it is a shutdown message
@@ -331,10 +271,8 @@ void dispatch(int parentPid, char * processName, int processPID, int processLife
     }
 
     free(newProcessName);
-    free(pipeBuffer);
+    free(originalPipeBufferPointer);
     //exit(0);
-
-
     
   } 
   else {
@@ -549,11 +487,6 @@ void readAndExecute() {
   //int status = 0;
   int processLifeSpan = 0;
   char * processName = NULL;
-  //  int pid = 0;
-
-
-  // child process
-  //  int counter = 0;
 
   char delimiter = ' ';
 
@@ -619,9 +552,6 @@ void readAndExecute() {
       updateKillCount();
       messagesFromChildren = messagesFromChildren - 1;
     }
-    //sleep(10);
-    //kill(getpid(), SIGHUP);
-    //check for processes 
     printf("********************\n");
 
     printf("number of freechildren is %d: \n", freeChildren);
@@ -666,8 +596,6 @@ void readAndExecute() {
   freeList(processList);
   freeList(monitoredPIDs);
   freeList(childPIDs);
-  printf("done with readAndExecute \n");
-
 
 }
 
