@@ -1,20 +1,12 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <string.h>
-#include <sys/wait.h>
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <signal.h>
-#include <time.h>
+#include <stdio.h> // for avoiding assignment issues 
+#include <errno.h> // for error printing
+#include <string.h> // for string functions
+#include <unistd.h>  // for sleep, close
+#include <fcntl.h> // for setting non blocking pipe
+#include <signal.h> // for signals
 #include <ctype.h> // for isspace() function
-#include "linkedList.h"
-#include "memwatch.h"
+#include "linkedList.h" // for linked list struct
+#include "memwatch.h" // for proper memory use checks
 
 
 void getDate(char * dateVar);
