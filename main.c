@@ -23,7 +23,7 @@ struct node * processList;
 struct node * monitoredPIDs;
 struct node * childPIDs;
 int messagesFromChildren = 0;
-int DEBUGGING = 1;
+int DEBUGGING = 0;
 
 void getDate(char * dateVar);
 void clearLogs();
@@ -90,7 +90,7 @@ int main(int argc, char *argv[]) {
 
 
 void sig_handler(int signum) {
-  int i = 0;
+  //  int i = 0;
 
   switch(signum) {
     
@@ -102,22 +102,22 @@ void sig_handler(int signum) {
   case 2:
     debugPrint("caught sigint, i am %d and parent is %d\n", getpid(), parentPid);
     if (getpid() == parentPid) {
-      debugPrint("parent receieved sigint, signalling children...\n");
+      /* debugPrint("parent receieved sigint, signalling children...\n"); */
 
-      struct node * currentNode = childPIDs;
-      for (i = 0; i < numberOfChildren; i++) {
-	debugPrint("sending sigint to %d\n",currentNode->key); 
-	kill(SIGINT, currentNode->key);
-	currentNode = currentNode->next;      
-      }
+      /* struct node * currentNode = childPIDs; */
+      /* for (i = 0; i < numberOfChildren; i++) { */
+      /* 	debugPrint("sending sigint to %d\n",currentNode->key);  */
+      /* 	kill(SIGINT, currentNode->key); */
+      /* 	currentNode = currentNode->next;       */
+      /* } */
       
-      char * message;
-      message = malloc(300);
+      /* char * message; */
+      /* message = malloc(300); */
 
-      snprintf(message, 290, "Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled);
-      writeToLogs("Info", message);
+      /* snprintf(message, 290, "Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled); */
+      /* writeToLogs("Info", message); */
 
-      free(message);
+      /* free(message); */
 
     }
     else {
@@ -561,12 +561,6 @@ void readAndExecute() {
     sleep(5);
 
     updateKillCount();
-
-    while (messagesFromChildren > 0) {
-      debugPrint("found a message from a child\n");
-      updateKillCount();
-      messagesFromChildren = messagesFromChildren - 1;
-    }
     debugPrint("********************\n");
 
     debugPrint("number of freechildren is %d: \n", freeChildren);
@@ -606,6 +600,27 @@ void readAndExecute() {
 
     
   }
+
+  int i = 0;
+
+  debugPrint("parent receieved sigint, signalling children...\n");
+
+  struct node * currentNode = childPIDs;
+  for (i = 0; i < numberOfChildren; i++) {
+    debugPrint("sending sigint to %d\n",currentNode->key); 
+    kill(SIGINT, currentNode->key);
+    currentNode = currentNode->next;      
+  }
+      
+  char * message;
+  message = malloc(300);
+
+  snprintf(message, 290, "Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled);
+  writeToLogs("Info", message);
+
+  free(message);
+
+
 
   fclose(fp2);
   freeList(processList);
