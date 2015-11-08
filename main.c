@@ -41,19 +41,7 @@ void readAndExecute();
 void dispatch(int parentPID, char * processName, int processPID, int processLifeSpan);
 void monitorProcess(char * processName, int processLifeSpan);
 void writeParentPIDToLogs();
-
-void debugPrint(char * message,...) {
-  // http://stackoverflow.com/questions/1056411/how-to-pass-variable-number-of-arguments-to-printf-sprintf?lq=1
-  if (DEBUGGING) {
-    va_list argptr;
-    va_start(argptr, message);
-    vfprintf(stdout, message, argptr);
-    va_end(argptr);    
-  }
-  else {
-    return;
-  }
-}
+void debugPrint(char * message,...);
 
 int main(int argc, char *argv[]) {
 
@@ -864,4 +852,17 @@ void writeParentPIDToLogs()  {
       
   free(parentPIDMessage);
   return;
+}
+
+void debugPrint(char * message,...) {
+  // http://stackoverflow.com/questions/1056411/how-to-pass-variable-number-of-arguments-to-printf-sprintf?lq=1
+  if (DEBUGGING) {
+    va_list argptr;
+    va_start(argptr, message);
+    vfprintf(stdout, message, argptr);
+    va_end(argptr);    
+  }
+  else {
+    return;
+  }
 }
