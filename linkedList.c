@@ -94,7 +94,7 @@ int searchNodes(struct node * head, char * valueToSearch, int keyToSearch) {
   while (currentNode != NULL && currentNode->next != NULL &&
 	 strcmp(currentNode->value,valueToSearch) != 0 &&
 	 currentNode->key != keyToSearch) {
-    printf("value is %s\n", currentNode->value);
+    //printf("value is %s\n", currentNode->value);
     currentNode = currentNode->next;
     location++;
   }
