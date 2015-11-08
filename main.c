@@ -46,12 +46,8 @@ void debugPrint(char * message,...);
 int main(int argc, char *argv[]) {
 
   parentPid = getpid();
-  debugPrint("Parent PID = %d\n", parentPid);
-
-  
-  
+  debugPrint("Parent PID = %d\n", parentPid);    
   debugPrint("set handlers\n");
-  
   if (pipe(newProcessToChild) < 0) {
     fprintf(stderr,"pipe error");
     exit(0);
@@ -91,31 +87,7 @@ void sig_handler(int signum) {
     break;
   case 2:
     debugPrint("caught sigint, i am %d and parent is %d\n", getpid(), parentPid);
-    if (getpid() == parentPid) {
-      /* debugPrint("parent receieved sigint, signalling children...\n"); */
-
-      /* struct node * currentNode = childPIDs; */
-      /* for (i = 0; i < numberOfChildren; i++) { */
-      /* 	debugPrint("sending sigint to %d\n",currentNode->key);  */
-      /* 	kill(SIGINT, currentNode->key); */
-      /* 	currentNode = currentNode->next;       */
-      /* } */
-      
-      /* char * message; */
-      /* message = malloc(300); */
-
-      /* snprintf(message, 290, "Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled); */
-      /* writeToLogs("Info", message); */
-
-      /* free(message); */
-
-    }
-    else {
-      debugPrint("recevied sigint in child, setting keepLooping to 0\n");
-    }
-
     keepLooping = 0;
-
     break;
   case 10:
     debugPrint("caught sigusr1\n");
