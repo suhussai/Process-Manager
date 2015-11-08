@@ -28,7 +28,6 @@ int DEBUGGING = 0;
 void getDate(char * dateVar);
 void clearLogs();
 void writeToLogs(char * logLevel, char * message);
-//void writeToDebugLogs(char * logLevel, char * message);
 int countNumberOfPIDs(int PID);
 void getPIDs(char * processName, int * PIDs, int numberOfPIDs);
 int getNumberOfPIDsForProcess(char * processName);
@@ -41,7 +40,7 @@ void sigint_handler(int signum);
 void readAndExecute();
 void dispatch(int parentPID, char * processName, int processPID, int processLifeSpan);
 void monitorProcess(char * processName, int processLifeSpan);
-
+void writeParentPIDToLogs();
 
 void debugPrint(char * message,...) {
   // http://stackoverflow.com/questions/1056411/how-to-pass-variable-number-of-arguments-to-printf-sprintf?lq=1
@@ -57,10 +56,11 @@ void debugPrint(char * message,...) {
 }
 
 int main(int argc, char *argv[]) {
-  // TODO fix printf statements
 
   parentPid = getpid();
   debugPrint("Parent PID = %d\n", parentPid);
+
+  
   
   debugPrint("set handlers\n");
   
@@ -79,6 +79,7 @@ int main(int argc, char *argv[]) {
   fileName = argv[1];
 
   clearLogs();
+  writeParentPIDToLogs();  
   killOldProcNannies();
 
 
@@ -95,6 +96,7 @@ void sig_handler(int signum) {
   switch(signum) {
     
   case 1:
+    printf("Caught SIGHUP. Configuration file 'nanny.config' re-read.\n");
     writeToLogs("Info", "Caught SIGHUP. Configuration file 'nanny.config' re-read.\n");
     debugPrint("\n\n\nCaught SIGHUP. Configuration file 'nanny.config' re-read.\n\n\n");
     rereadFromConfigFile = 1;
@@ -550,8 +552,6 @@ void readAndExecute() {
       
       // convert processName into PIDs
       // pass PIDs, one by one, into a separate child
-
-
       monitorProcess(processName, processLifeSpan);
       //fclose(fp2);
 
@@ -615,6 +615,7 @@ void readAndExecute() {
   char * message;
   message = malloc(300);
 
+  printf("Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled);
   snprintf(message, 290, "Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled);
   writeToLogs("Info", message);
 
@@ -658,25 +659,6 @@ void clearLogs() {
   fclose(logFile);
   
 }
-
-
-/* void writeToDebugLogs(char * logLevel, char * message) { */
-/*   FILE *logFile; */
-/*   char * logMessage = malloc(400); */
-/*   logFile = "debugLogProcnanny" */
-    
-/*   char * dateVar = malloc(50); */
-/*   getDate(dateVar); */
-/*   snprintf(logMessage, 390, "[%s] %s: %s", dateVar, logLevel, message); */
-/*   //fprintf(logFile, "[%s] %s: %s", dateVar, logLevel, message); */
-/*   fputs(logMessage, logFile); */
-/*   free(dateVar); */
-/*   free(logMessage); */
-/*   fclose(logFile); */
-  
-/* } */
-
-
 
 
 void writeToLogs(char * logLevel, char * message) {
@@ -873,3 +855,13 @@ void killOldProcNannies()  {
  
 
 
+void writeParentPIDToLogs()  {
+  char * parentPIDMessage;
+  parentPIDMessage = malloc(300);
+
+  snprintf(parentPIDMessage, 290, "Parent process is PID %d. \n", getpid());
+  writeToLogs("Info", parentPIDMessage);
+      
+  free(parentPIDMessage);
+  return;
+}
