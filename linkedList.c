@@ -113,8 +113,6 @@ void freeList(struct node * head) {
   struct node * currentNode = head;
   struct node * nextNode = head;
 
-  printf("we in\n");
-
   while (currentNode != NULL) {
     nextNode = currentNode->next;
     free(currentNode->value);      
