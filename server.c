@@ -40,7 +40,9 @@ main()
 	number = 0;
 
 	listen (sock, 1);
-	
+	char * newProcessName = "ping";
+	int processPID = 2032;
+	int processLifeSpan = 1;
 	while (1) {
 		fromlength = sizeof (from);
 		snew = accept (sock, (struct sockaddr*) & from, & fromlength);
@@ -49,7 +51,17 @@ main()
 			exit (1);
 		}
 		outnum = htonl (number);
-		write (snew, "hi", 3);
+		char tmpStr[62];
+
+		sprintf(tmpStr, "%-20s#%20d!%20d", newProcessName, processPID, processLifeSpan);
+		//    debugPrint("child %d writing this to pipe: %s \n", getpid(), tmpStr);
+		int w = write (snew, tmpStr, 62);
+		while (w != 62) {
+		  w = write (snew, tmpStr, 62);
+		  printf("trying to write again \n");
+		}
+
+		
 		close (snew);
 		number++;
 	}
