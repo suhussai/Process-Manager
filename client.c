@@ -33,6 +33,13 @@ struct node * childPIDs;
 int messagesFromChildren = 0;
 int DEBUGGING = 1;
 
+
+int s;
+struct sockaddr_in server;
+struct hostent *host;
+int MY_PORT = 0;
+
+
 void getDate(char * dateVar);
 void clearLogs();
 void writeToLogs(char * logLevel, char * message);
@@ -55,6 +62,87 @@ void debugPrint(char * message,...);
 /* This is a sample client program for the number server. The client and */
 /* the server need not run on the same machine.				 */
 /* --------------------------------------------------------------------- */
+
+
+
+/* void writeToServer(char * message) { */
+  
+/*   s = socket (AF_INET, SOCK_STREAM, 0); */
+
+/*   if (s < 0) { */
+/*     perror ("Client: cannot open socket"); */
+/*     exit (1); */
+/*   } */
+
+/*   bzero (&server, sizeof (server)); */
+/*   bcopy (host->h_addr, & (server.sin_addr), host->h_length); */
+/*   server.sin_family = host->h_addrtype; */
+/*   server.sin_port = htons (MY_PORT); */
+
+/*   if (connect (s, (struct sockaddr*) & server, sizeof (server))) { */
+/*     perror ("Client: cannot connect to server"); */
+/*     exit (1); */
+/*   } */
+		
+/*   write (s, message, 62); */
+  
+/* } */
+
+
+void readFromServer(char * message) {
+  // stores message in ... message...
+  s = socket (AF_INET, SOCK_STREAM, 0);
+
+  if (s < 0) {
+    perror ("Client: cannot open socket");
+    exit (1);
+  }
+
+  bzero (&server, sizeof (server));
+  bcopy (host->h_addr, & (server.sin_addr), host->h_length);
+  server.sin_family = host->h_addrtype;
+  server.sin_port = htons (MY_PORT);
+
+  debugPrint("connecting...\n");
+
+  if (connect (s, (struct sockaddr*) & server, sizeof (server))) {
+    perror ("Client: cannot connect to server");
+    exit (1);
+  }
+	
+  read (s, message, 62);
+  // caller needs to free message
+  // http://stackoverflow.com/questions/11656532/returning-an-array-using-c
+}
+
+
+void writeToLogs(char * logLevel, char * message) {
+  char * logMessage = malloc(400);
+    
+  char * dateVar = malloc(50);
+  getDate(dateVar);
+  snprintf(logMessage, 390, "[%s] %s: %s", dateVar, logLevel, message);
+  //fprintf(logFile, "[%s] %s: %s", dateVar, logLevel, message);
+  //  write(s, logMessage, sizeof(logMessage));
+  //  fputs(logMessage, logFile);
+  free(dateVar);
+  free(logMessage);
+  
+}
+
+void getDate(char * dateVar) {
+  FILE * fpTemp;
+  fpTemp = popen("date", "r");
+
+  if (fpTemp != NULL) {
+    fgets(dateVar, 50,fpTemp);
+    dateVar[strlen(dateVar) - 1] = '\0';
+    //printf("%s \n", dateVar);
+  }
+  pclose(fpTemp);
+}
+
+
 
 int getNumberOfPIDsForProcess(char * processName) {
   // populates PIDs with 
@@ -156,13 +244,13 @@ void monitorProcess(char * processName, int processLifeSpan) {
   // check to make sure process "processName" is still active
   if ((numberOfPIDs = getNumberOfPIDsForProcess(processName))  < 1) {
     debugPrint("no processes %s found \n", processName);
-    /* char * message; */
-    /* message = malloc(300); */
+    char * message;
+    message = malloc(300);
 
-    /* snprintf(message, 290, "No '%s' processes found. \n", processName); */
-    /* writeToLogs("Info", message); */
+    snprintf(message, 290, "No '%s' processes found. \n", processName);
+    writeToLogs("Info", message);
       
-    /* free(message); */
+    free(message);
     return;
   }
       
@@ -453,6 +541,7 @@ char *trimwhitespace(char *str)
 
 int main(int argc, char * argv[]) {
 
+  debugPrint("staring main\n");
   if (pipe(newProcessToChild) < 0) {
     fprintf(stderr,"pipe error");
     exit(0);
@@ -465,14 +554,13 @@ int main(int argc, char * argv[]) {
 
   fcntl(killCountPipe[0], F_SETFL, O_NONBLOCK);
 
-  int s;
-  struct sockaddr_in server;  
-  struct hostent *host;
   printf("connecting to %s on port %d \n", argv[1], atoi(argv[2]));
-  int MY_PORT = atoi(argv[2]);
+  MY_PORT = atoi(argv[2]);
 	
   /* Put here the name of the sun on which the server is executed */
   host = gethostbyname (argv[1]);
+
+
 
   if (host == NULL) {
     perror ("Client: cannot get host description");
@@ -481,25 +569,14 @@ int main(int argc, char * argv[]) {
   char * pipeBuffer = malloc(62);
   while (1) {
     // use this loop to get process lists
-    // 
-    s = socket (AF_INET, SOCK_STREAM, 0);
 
-    if (s < 0) {
-      perror ("Client: cannot open socket");
-      exit (1);
-    }
 
-    bzero (&server, sizeof (server));
-    bcopy (host->h_addr, & (server.sin_addr), host->h_length);
-    server.sin_family = host->h_addrtype;
-    server.sin_port = htons (MY_PORT);
+    debugPrint("reading from server\n");
+    readFromServer(pipeBuffer);
+    debugPrint("got %s\n", pipeBuffer);
 
-    if (connect (s, (struct sockaddr*) & server, sizeof (server))) {
-      perror ("Client: cannot connect to server");
-      exit (1);
-    }
-		
-    read (s, pipeBuffer, 62);
+    //    writeToServer("got it brah!!");
+
     //    char * tmpBuffer = pipeBuffer;
   
     char * processName;
@@ -531,6 +608,7 @@ int main(int argc, char * argv[]) {
     while (1) {
       monitorProcess(newP, processLifeSpan);
       sleep (5);
+      
       
     }
   }

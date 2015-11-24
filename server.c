@@ -34,11 +34,76 @@ struct node * childPIDs;
 int messagesFromChildren = 0;
 int DEBUGGING = 1;
 
+int sock, snew;
+socklen_t fromlength;
+struct sockaddr_in master, from;
+
+
 void sig_handler(int signum);
 void debugPrint(char * message,...);
 void writeToLogs(char * logLevel, char * message);
 void clearLogs();
 void getDate(char * dateVar);
+
+void writeToClient(char * message) {
+
+  listen (sock, 5);
+  fromlength = sizeof (from);
+  snew = accept (sock, (struct sockaddr*) & from, & fromlength);
+  if (snew < 0) {
+    perror ("Server: accept failed");
+    exit (1);
+  }
+  
+  int w = write(snew, message, 62);
+  while (w != 62) {
+    w = write (snew, message, 62);
+    printf("trying to write again \n");
+    sleep(5);
+  }
+
+  
+}
+
+
+/* void readFromClient(char * tmpStr2) { */
+
+/*   sock = socket (AF_INET, SOCK_STREAM, 0); */
+/*   if (sock < 0) { */
+/*     perror ("Server: cannot open master socket"); */
+/*     exit (1); */
+/*   } */
+
+/*   master.sin_family = AF_INET; */
+/*   master.sin_addr.s_addr = INADDR_ANY; */
+/*   master.sin_port = htons (MY_PORT); */
+
+/*   if (bind (sock, (struct sockaddr*) &master, sizeof (master))) { */
+/*     perror ("Server: cannot bind master socket"); */
+/*     exit (1); */
+/*   } */
+
+/*   listen (sock, 1); */
+
+/*   fromlength = sizeof (from); */
+/*   snew = accept (sock, (struct sockaddr*) & from, & fromlength); */
+/*   if (snew < 0) { */
+/*     perror ("Server: accept failed"); */
+/*     exit (1); */
+/*   } */
+
+
+/*   // check for messages from client */
+/*   int w2 = read (snew, tmpStr2, 62); */
+/*   while (w2 < 0) { */
+/*     w2 = read (snew, tmpStr2, 62); */
+/*     printf("trying to read again \n"); */
+/*     sleep(5); */
+/*   } */
+/*   debugPrint("we got %s from client", tmpStr2); */
+
+/* } */
+
 
 
 /* --------------------------------------------------------------------- */
@@ -52,8 +117,6 @@ void getDate(char * dateVar);
 int main(int argc, char * argv[]) {
   debugPrint("starting program\n");
 
-  int sock, snew, fromlength;
-  struct sockaddr_in master, from;
 
   sock = socket (AF_INET, SOCK_STREAM, 0);
   if (sock < 0) {
@@ -61,16 +124,25 @@ int main(int argc, char * argv[]) {
     exit (1);
   }
 
+
   master.sin_family = AF_INET;
   master.sin_addr.s_addr = INADDR_ANY;
   master.sin_port = htons (MY_PORT);
+
 
   if (bind (sock, (struct sockaddr*) &master, sizeof (master))) {
     perror ("Server: cannot bind master socket");
     exit (1);
   }
 
-  listen (sock, 1);
+
+  char * tmpStr23 = malloc(62);
+
+  sprintf(tmpStr23, "%-20s#%20d!%20d", "top", 2, 2);
+  debugPrint("writing this to socket: %s \n", tmpStr23);
+  writeToClient(tmpStr23);
+
+
 
 
   debugPrint("starting readAndExecute\n");
@@ -138,21 +210,20 @@ int main(int argc, char * argv[]) {
       
       debugPrint("beginning write to internet socket\n");
 
-      fromlength = sizeof (from);
-      snew = accept (sock, (struct sockaddr*) & from, & fromlength);
-      if (snew < 0) {
-	perror ("Server: accept failed");
-	exit (1);
-      }
-      char tmpStr[62];
+      /* fromlength = sizeof (from); */
+      /* snew = accept (sock, (struct sockaddr*) & from, & fromlength); */
+      /* if (snew < 0) { */
+      /* 	perror ("Server: accept failed"); */
+      /* 	exit (1); */
+      /* } */
+      char * tmpStr = malloc(62);
 
       sprintf(tmpStr, "%-20s#%20d!%20d", processName, 2, processLifeSpan);
       //    debugPrint("child %d writing this to pipe: %s \n", getpid(), tmpStr);
-      int w = write (snew, tmpStr, 62);
-      while (w != 62) {
-	w = write (snew, tmpStr, 62);
-	printf("trying to write again \n");
-      }
+      /* writeToClient(tmpStr); */
+      /* char * tmpStr2 = malloc(62); */
+      /* readFromClient(tmpStr2); */
+      
   
       debugPrint("finished writing to internet socket\n");
       close (snew);
@@ -162,6 +233,9 @@ int main(int argc, char * argv[]) {
 
     rereadFromConfigFile = -1;
     sleep(5);
+
+
+    
   }
 
   int i = 0;
