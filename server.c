@@ -82,7 +82,6 @@ void writeToClient(char * message) {
   listen (sock, 5);
   fromlength = sizeof (from);
   snew = accept (sock, (struct sockaddr*) & from, & fromlength);
-  perror ("Server: accept failed");
 
   while (snew < 0) {
     listen (sock, 5);
@@ -92,6 +91,7 @@ void writeToClient(char * message) {
   }
   
   int w = write(snew, message, 63);
+  debugPrint("wrote %d b's which was %s\n", w, message);
   while (w != 63) {
     w = write (snew, message, 63);
     printf("trying to write again cuz we wrote %d \n", w);
@@ -138,17 +138,22 @@ int readFromClient() {
     fputs(newLogMessage, logFile);
     fputs("\n",logFile);
     fclose(logFile);
-    
+    free(logMessage);
     return 0;
   }
   else if (logMessage[0] == 'k') {
-    debugPrint("updating kill count\n");
+    logMessage[0] = '0';
+    debugPrint("updating kill count: %s\n", logMessage);
     totalProcsKilled += atoi(logMessage);
     debugPrint("new kill count %d\n", totalProcsKilled);
+    free(logMessage);
+    return 0;
   }
 
-  free(logMessage);
-  return 1;
+  else {
+    free(logMessage);
+    return 1;
+  }
 
 
 }
@@ -265,10 +270,10 @@ int main(int argc, char * argv[]) {
       if (readFromClient() == 1) {
 	debugPrint("request for info received... sending\n");
 	debugPrint("beginning write to internet socket\n");
-
 	snprintf(tmpStr, 63, "%-20s#%20d!%20d", "null", getSize(processList), 5);
 	debugPrint("writing this to pipe: %s \n", tmpStr);
 	writeToClient(tmpStr);
+	sleep(0.5);
 	struct node * currentNode = processList;
 	while (currentNode != NULL) {
 	  
@@ -318,6 +323,7 @@ int main(int argc, char * argv[]) {
   free(message);
 
   fclose(fp2);
+  free(lastMessage);
   freeList(processList);
   return 0;
 }

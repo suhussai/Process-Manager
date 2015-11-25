@@ -123,8 +123,8 @@ void readFromServer(char * message) {
     debugPrint("connecting again...\n");
   }
 	
-  read (s, message, 63);
-  debugPrint("we received this from server: %s\n", message);
+  int rad = read (s, message, 63);
+  debugPrint("we received %d b's this from server: %s\n",rad, message);
   close(s);
   // caller needs to free message
   // http://stackoverflow.com/questions/11656532/returning-an-array-using-c
@@ -660,23 +660,27 @@ int main(int argc, char * argv[]) {
     exit (1);
   }
 
-  char * pipeBuffer = malloc(63);
+  char * pipeBuffer = NULL;
   /* char * procInfoRequest = malloc(200); */
   /* snprintf(procInfoRequest,200, "%-200s", procInfoString); */
   /* char * a = "test\0"; */
   char a[200] = "test";
-  char * processName = malloc(21);
+  char * processName = NULL;
   int len = 0;
   int numberofProcesses = 0;
   int processLifeSpan = 0;
   int PID = 0;
+  char * pointerToProcessName = NULL;
+  char * pointerToPipeBuffer = NULL;
 
 
   while (keepLooping == 1) {
     // use this loop to get process lists
 
+    pipeBuffer = malloc(63);
+    pointerToPipeBuffer = pipeBuffer;
 
-    debugPrint("reading from server\n");
+    debugPrint("writing server\n");
     writeToServer(a);
     readFromServer(pipeBuffer);
     debugPrint("got %s\n", pipeBuffer);
@@ -696,7 +700,8 @@ int main(int argc, char * argv[]) {
     PID = 0;
 
     len = strchr(pipeBuffer,'#') - pipeBuffer;
-    //    processName = malloc(len+1);
+    processName = malloc(len+1);
+    pointerToProcessName = processName;
     strncpy(processName, pipeBuffer, len);
     processName[len] = '\0'; 
 
@@ -707,6 +712,11 @@ int main(int argc, char * argv[]) {
     numberofProcesses = atoi(pipeBuffer+1);
     processLifeSpan = atoi(strchr(pipeBuffer,'!')+1);
     debugPrint("server: we have  %d different procs to monitor\n", numberofProcesses);
+
+    free(pointerToPipeBuffer);
+    free(pointerToProcessName);
+    pipeBuffer = NULL;
+    processName = NULL;
     //    free(processName);
     while(numberofProcesses > 0) {
       //      char * processName = NULL;
@@ -715,9 +725,14 @@ int main(int argc, char * argv[]) {
       PID = 0;
       numberofProcesses--;
 
+      pipeBuffer = malloc(63);
+      pointerToPipeBuffer = pipeBuffer;
       readFromServer(pipeBuffer);
+      
 
       len = strchr(pipeBuffer,'#') - pipeBuffer;
+      processName = malloc(len+1);
+      pointerToProcessName = processName;
       //processName = (char *)realloc(processName, len+1);
       strncpy(processName, pipeBuffer, len);
       processName[len] = '\0'; 
@@ -736,7 +751,7 @@ int main(int argc, char * argv[]) {
       debugPrint("name: %s \n", newP);
       debugPrint("life span: %d \n", processLifeSpan);
       debugPrint("pid: %d \n", PID);
-      close (s);
+      //      close (s);
       debugPrint("Process %d got %s\n", getpid (),
 	       pipeBuffer);
 
@@ -752,6 +767,10 @@ int main(int argc, char * argv[]) {
       }
 
       debugPrint("finished setting/looking thro processList\n");
+      free(pointerToPipeBuffer);
+      free(pointerToProcessName);
+      pipeBuffer = NULL;
+      processName = NULL;
     }
 
 
