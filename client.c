@@ -114,7 +114,7 @@ void readFromServer(char * message) {
     exit (1);
   }
 	
-  read (s, message, 62);
+  read (s, message, 63);
   // caller needs to free message
   // http://stackoverflow.com/questions/11656532/returning-an-array-using-c
 }
@@ -125,7 +125,9 @@ void writeToLogs(char * logLevel, char * message) {
     
   char * dateVar = malloc(50);
   getDate(dateVar);
-  snprintf(logMessage, 190, "[%s] %s: %s\n", dateVar, logLevel, message);
+  char * hostName = malloc(50);
+  gethostname(hostName, 45);
+  snprintf(logMessage, 190, "[%s] %s: %s on node %s\n", dateVar, logLevel, message, hostName);
   writeToServer(logMessage);
   //fprintf(logFile, "[%s] %s: %s", dateVar, logLevel, message);
   //  write(s, logMessage, sizeof(logMessage));
@@ -328,9 +330,9 @@ void monitorProcess(char * processName, int processLifeSpan) {
       /* write message start */
       
       // close(newProcessToChild[0]);
-      char tmpStr[62];
-      snprintf(tmpStr, 62, "%-20s#%20d!%20d", processName, PIDs[counter], processLifeSpan);
-      write(newProcessToChild[1], tmpStr, 62);
+      char tmpStr[63];
+      snprintf(tmpStr, 63, "%-20s#%20d!%20d", processName, PIDs[counter], processLifeSpan);
+      write(newProcessToChild[1], tmpStr, 63);
 
 
       debugPrint("using children\n");
@@ -388,7 +390,7 @@ void dispatch(int parentPid, char * processName, int processPID, int processLife
   /* read message start */
 
   if (processPID == -1 ) {
-    char * pipeBuffer= malloc(62);
+    char * pipeBuffer= malloc(63);
     char * originalPipeBufferPointer = pipeBuffer;
     char * newProcessName;
     // if we need to get process id
@@ -396,7 +398,7 @@ void dispatch(int parentPid, char * processName, int processPID, int processLife
     //    debugPrint("from child: preparing to read messages \n");
 
     close(newProcessToChild[1]);
-    read(newProcessToChild[0], pipeBuffer, 62);
+    read(newProcessToChild[0], pipeBuffer, 63);
 
     // after we've retrieved info from pipe
     // check if it is a shutdown message
@@ -426,13 +428,13 @@ void dispatch(int parentPid, char * processName, int processPID, int processLife
       //    debugPrint("from child: sending log info  to pipe \n");
       /* write message start */
       close(killCountPipe[0]);
-      char tmpStr[62];
+      char tmpStr[63];
 
-      snprintf(tmpStr, 62, "%-20s#%20d!%20d", newProcessName, processPID, processLifeSpan);
+      snprintf(tmpStr, 63, "%-20s#%20d!%20d", newProcessName, processPID, processLifeSpan);
       //    debugPrint("child %d writing this to pipe: %s \n", getpid(), tmpStr);
-      int w = write(killCountPipe[1], tmpStr, 62);
-      while (w != 62) {
-	w = write(killCountPipe[1], tmpStr, 62);
+      int w = write(killCountPipe[1], tmpStr, 63);
+      while (w != 63) {
+	w = write(killCountPipe[1], tmpStr, 63);
 	debugPrint("%s\n",strerror(errno));
       }
       debugPrint("child %d w was %d \n",getpid(), w);
@@ -454,13 +456,13 @@ void dispatch(int parentPid, char * processName, int processPID, int processLife
       //    debugPrint("from child: sending log info  to pipe \n");
       /* write message start */
       close(killCountPipe[0]);
-      char tmpStr[62];
+      char tmpStr[63];
 
-      snprintf(tmpStr, 62, "%-20s#%20d!%20d", processName, processPID, processLifeSpan);
+      snprintf(tmpStr, 63, "%-20s#%20d!%20d", processName, processPID, processLifeSpan);
       //    debugPrint("child %d writing this to pipe: %s \n", getpid(), tmpStr);
-      int w = write(killCountPipe[1], tmpStr, 62);
-      while (w != 62) {
-	w = write(killCountPipe[1], tmpStr, 62);
+      int w = write(killCountPipe[1], tmpStr, 63);
+      while (w != 63) {
+	w = write(killCountPipe[1], tmpStr, 63);
 	debugPrint("%s\n",strerror(errno));
       }
       debugPrint("child %d w was %d \n",getpid(), w);
@@ -554,10 +556,10 @@ void updateKillCount() {
 
 
   //close(killCountPipe[1]);
-  char * pipeBuffer= malloc(62);
+  char * pipeBuffer= malloc(63);
   debugPrint("updating kill...\n");
 
-  if (read(killCountPipe[0], pipeBuffer, 62) <= 0) {
+  if (read(killCountPipe[0], pipeBuffer, 63) <= 0) {
     debugPrint("found nothing on killCount pipe, returning\n");
     free(pipeBuffer);
     return;
@@ -601,9 +603,16 @@ void updateKillCount() {
   debugPrint("PID (%d) (%s) killed after exceeding %d seconds. \n", PID, processName, processLifeSpan);
   snprintf(inputBuffer, 150, "PID (%d) (%s) killed after exceeding %d seconds. \n", PID, processName, processLifeSpan);
   writeToLogs("Action", inputBuffer);
-  
+
+
+  debugPrint("sending message to update total kill count in server\n");
+  char * killCountMessage = malloc(200);
+  snprintf(killCountMessage, 200, "k%-199d", totalProcsKilled);
+  writeToServer(killCountMessage);
+  debugPrint("sent kill count update!\n");
 
   free(tmpBuffer);
+  free(killCountMessage);
   free(inputBuffer);
   free(processName);  
   freeChildren = freeChildren + 1;  
@@ -639,7 +648,7 @@ int main(int argc, char * argv[]) {
     exit (1);
   }
 
-  char * pipeBuffer = malloc(62);
+  char * pipeBuffer = malloc(63);
   /* char * procInfoRequest = malloc(200); */
   /* snprintf(procInfoRequest,200, "%-200s", procInfoString); */
   /* char * a = "test\0"; */
@@ -653,6 +662,12 @@ int main(int argc, char * argv[]) {
     writeToServer(a);
     readFromServer(pipeBuffer);
     debugPrint("got %s\n", pipeBuffer);
+    
+    if (pipeBuffer[0] == '!') {
+      keepLooping = 0;
+      debugPrint("got exit signal!!!!!\n");
+      continue;
+    }
 
     //    char * tmpBuffer = pipeBuffer;
   

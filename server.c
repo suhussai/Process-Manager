@@ -44,6 +44,18 @@ void writeToLogs(char * logLevel, char * message);
 void clearLogs();
 void getDate(char * dateVar);
 
+void writeParentPIDToLogs()  {
+  char * parentPIDMessage;
+  parentPIDMessage = malloc(300);
+
+  snprintf(parentPIDMessage, 290, "Parent process is PID %d. \n", getpid());
+  writeToLogs("Info", parentPIDMessage);
+      
+  free(parentPIDMessage);
+  return;
+}
+
+
 // function from http://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
 char *trimwhitespace(char *str)
 {
@@ -71,14 +83,14 @@ void writeToClient(char * message) {
   listen (sock, 5);
   fromlength = sizeof (from);
   snew = accept (sock, (struct sockaddr*) & from, & fromlength);
-  if (snew < 0) {
+  while (snew < 0) {
     perror ("Server: accept failed");
-    exit (1);
+    snew = accept (sock, (struct sockaddr*) & from, & fromlength);
   }
   
-  int w = write(snew, message, 62);
-  while (w != 62) {
-    w = write (snew, message, 62);
+  int w = write(snew, message, 63);
+  while (w != 63) {
+    w = write (snew, message, 63);
     printf("trying to write again \n");
     sleep(5);
   }
@@ -94,9 +106,9 @@ int readFromClient() {
 
   fromlength = sizeof (from);
   snew = accept (sock, (struct sockaddr*) & from, & fromlength);
-  if (snew < 0) {
+  while (snew < 0) {
     perror ("Server: accept failed");
-    exit (1);
+    snew = accept (sock, (struct sockaddr*) & from, & fromlength);
   }
 
 
@@ -124,6 +136,11 @@ int readFromClient() {
     
     return 0;
   }
+  else if (logMessage[0] == 'k') {
+    debugPrint("updating kill count\n");
+    totalProcsKilled += atoi(logMessage);
+    debugPrint("new kill count %d\n", totalProcsKilled);
+  }
 
   free(logMessage);
   return 1;
@@ -143,7 +160,8 @@ int readFromClient() {
 
 int main(int argc, char * argv[]) {
   debugPrint("starting program\n");
-
+  clearLogs();
+  writeParentPIDToLogs();
 
   sock = socket (AF_INET, SOCK_STREAM, 0);
   if (sock < 0) {
@@ -194,8 +212,9 @@ int main(int argc, char * argv[]) {
   char * processName = NULL;
 
   char delimiter = ' ';
+  char * tmpStr = malloc(63);
 
-  while(keepLooping == 1) {
+  while(rereadFromConfigFile == 1) {
 
 
     if (rereadFromConfigFile == 1) {
@@ -238,19 +257,17 @@ int main(int argc, char * argv[]) {
 
     rereadFromConfigFile = -1;
     while(keepLooping == 1) {
-
       if (readFromClient() == 1) {
 	debugPrint("request for info received... sending\n");
 	debugPrint("beginning write to internet socket\n");
-	char * tmpStr = malloc(62);
 
-	snprintf(tmpStr, 62, "%-20s#%20d!%20d", "null", getSize(processList), 1);
+	snprintf(tmpStr, 63, "%-20s#%20d!%20d", "null", getSize(processList), 5);
 	debugPrint("writing this to pipe: %s \n", tmpStr);
 	writeToClient(tmpStr);
 	struct node * currentNode = processList;
 	while (currentNode != NULL) {
 	  
-	  snprintf(tmpStr, 62, "%-20s#%20d!%20d", currentNode->value, 11, currentNode->key);
+	  snprintf(tmpStr, 63, "%-20s#%20d!%20d", currentNode->value, 11, currentNode->key);
 	  debugPrint("writing this to pipe: %s \n", tmpStr);
 	  writeToClient(tmpStr);	  
 	  currentNode = currentNode->next;
@@ -265,9 +282,10 @@ int main(int argc, char * argv[]) {
       }
 	
     }
+    free(tmpStr);
       
 
-    sleep(5);
+    //    sleep(5);
     //debugPrint("reread = %d\n", rereadFromConfigFile);
     //debugPrint("trying to read from client...\n");
     //    readFromClient();
@@ -276,17 +294,15 @@ int main(int argc, char * argv[]) {
     
   }
 
-  int i = 0;
+  debugPrint("server receieved sigint, signalling clients...\n");
+  readFromClient();
+  char * lastMessage = malloc(63);
 
-  debugPrint("parent receieved sigint, signalling children...\n");
+  snprintf(lastMessage, 63, "!%-19s#%20d!%20d", "null", 1, 5);
+  debugPrint("writing lastMessage to pipe: %s \n", lastMessage);
+  writeToClient(lastMessage);
+  close(snew);
 
-  struct node * currentNode = childPIDs;
-  for (i = 0; i < numberOfChildren; i++) {
-    debugPrint("sending sigint to %d\n",currentNode->key); 
-    kill(SIGINT, currentNode->key);
-    currentNode = currentNode->next;      
-  }
-      
   char * message;
   message = malloc(200);
 
