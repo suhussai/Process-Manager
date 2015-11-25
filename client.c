@@ -80,15 +80,18 @@ void writeToServer(char * message) {
   server.sin_family = host->h_addrtype;
   server.sin_port = htons (MY_PORT);
 
-  if (connect (s, (struct sockaddr*) & server, sizeof (server))) {
+  while (connect (s, (struct sockaddr*) & server, sizeof (server))) {
     perror ("Client: cannot connect to server");
-    exit (1);
+    debugPrint("Tring again\n");
+    //exit (1);
   }
 	
   char * longMessage = malloc(200);
   snprintf(longMessage, 200, "%-200s", message);
   debugPrint("sending this to server %s \n", longMessage);
   write (s, longMessage, 200);
+  close(s);
+  free(longMessage);
   debugPrint("sent long message to server\n");
 }
 
@@ -109,12 +112,20 @@ void readFromServer(char * message) {
 
   debugPrint("connecting...\n");
 
-  if (connect (s, (struct sockaddr*) & server, sizeof (server))) {
+  while (connect (s, (struct sockaddr*) & server, sizeof (server))) {
     perror ("Client: cannot connect to server");
-    exit (1);
+
+    bzero (&server, sizeof (server));
+    bcopy (host->h_addr, & (server.sin_addr), host->h_length);
+    server.sin_family = host->h_addrtype;
+    server.sin_port = htons (MY_PORT);
+
+    debugPrint("connecting again...\n");
   }
 	
   read (s, message, 63);
+  debugPrint("we received this from server: %s\n", message);
+  close(s);
   // caller needs to free message
   // http://stackoverflow.com/questions/11656532/returning-an-array-using-c
 }
@@ -132,6 +143,7 @@ void writeToLogs(char * logLevel, char * message) {
   //fprintf(logFile, "[%s] %s: %s", dateVar, logLevel, message);
   //  write(s, logMessage, sizeof(logMessage));
   //  fputs(logMessage, logFile);
+  free(hostName);
   free(dateVar);
   free(logMessage);
   
@@ -653,7 +665,13 @@ int main(int argc, char * argv[]) {
   /* snprintf(procInfoRequest,200, "%-200s", procInfoString); */
   /* char * a = "test\0"; */
   char a[200] = "test";
-  
+  char * processName = malloc(21);
+  int len = 0;
+  int numberofProcesses = 0;
+  int processLifeSpan = 0;
+  int PID = 0;
+
+
   while (keepLooping == 1) {
     // use this loop to get process lists
 
@@ -671,14 +689,14 @@ int main(int argc, char * argv[]) {
 
     //    char * tmpBuffer = pipeBuffer;
   
-    char * processName;
-    int len = 0;
-    int numberofProcesses = 0;
-    int processLifeSpan = 0;
-    int PID = 0;
+    //    char * processName;
+    len = 0;
+    numberofProcesses = 0;
+    processLifeSpan = 0;
+    PID = 0;
 
     len = strchr(pipeBuffer,'#') - pipeBuffer;
-    processName = malloc(len+1);
+    //    processName = malloc(len+1);
     strncpy(processName, pipeBuffer, len);
     processName[len] = '\0'; 
 
@@ -782,6 +800,12 @@ int main(int argc, char * argv[]) {
       
   }
   
+  free(pipeBuffer);
+  free(processName);
+  
+  freeList(processList);
+  freeList(monitoredPIDs);
+  freeList(childPIDs);
   return 0;
 }
 

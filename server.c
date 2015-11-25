@@ -79,21 +79,25 @@ char *trimwhitespace(char *str)
 
 
 void writeToClient(char * message) {
-
   listen (sock, 5);
   fromlength = sizeof (from);
   snew = accept (sock, (struct sockaddr*) & from, & fromlength);
+  perror ("Server: accept failed");
+
   while (snew < 0) {
-    perror ("Server: accept failed");
+    listen (sock, 5);
+    fromlength = sizeof (from);
     snew = accept (sock, (struct sockaddr*) & from, & fromlength);
+    perror ("Server: accept failed");
   }
   
   int w = write(snew, message, 63);
   while (w != 63) {
     w = write (snew, message, 63);
-    printf("trying to write again \n");
+    printf("trying to write again cuz we wrote %d \n", w);
     sleep(5);
   }
+  close(snew);
 
   
 }
@@ -115,6 +119,7 @@ int readFromClient() {
   // check for messages from client
   char * logMessage = malloc(200);
   int w2 = read (snew, logMessage, 200);
+  //  close(snew);
   while (w2 < 0) {
     w2 = read (snew, logMessage, 200);
     printf("trying to read again \n");
@@ -301,7 +306,7 @@ int main(int argc, char * argv[]) {
   snprintf(lastMessage, 63, "!%-19s#%20d!%20d", "null", 1, 5);
   debugPrint("writing lastMessage to pipe: %s \n", lastMessage);
   writeToClient(lastMessage);
-  close(snew);
+  //close(snew);
 
   char * message;
   message = malloc(200);
@@ -313,6 +318,7 @@ int main(int argc, char * argv[]) {
   free(message);
 
   fclose(fp2);
+  freeList(processList);
   return 0;
 }
 
@@ -390,7 +396,7 @@ void writeToLogs(char * logLevel, char * message) {
   fputs(newLogMessage, logFile);
   free(dateVar);
   free(logMessage);
-  free(newLogMessage);
+  //  free(newLogMessage);
   fclose(logFile);
   
 }
