@@ -33,7 +33,6 @@ struct node * monitoredPIDs;
 struct node * childPIDs;
 int messagesFromChildren = 0;
 int DEBUGGING = 1;
-
 int sock, snew;
 socklen_t fromlength;
 struct sockaddr_in master, from;
@@ -44,6 +43,28 @@ void debugPrint(char * message,...);
 void writeToLogs(char * logLevel, char * message);
 void clearLogs();
 void getDate(char * dateVar);
+
+// function from http://stackoverflow.com/questions/122616/how-do-i-trim-leading-trailing-whitespace-in-a-standard-way
+char *trimwhitespace(char *str)
+{
+  char *end;
+
+  // Trim leading space
+  while(isspace(*str)) str++;
+
+  if(*str == 0)  // All spaces?
+    return str;
+
+  // Trim trailing space
+  end = str + strlen(str) - 1;
+  while(end > str && isspace(*end)) end--;
+
+  // Write new null terminator
+  *(end+1) = 0;
+  
+  return str;
+}
+
 
 void writeToClient(char * message) {
 
@@ -66,43 +87,49 @@ void writeToClient(char * message) {
 }
 
 
-/* void readFromClient(char * tmpStr2) { */
+int readFromClient() {
+  // returns 1 meaning send process name and lifespan
+  // else do nothing
+  listen (sock, 5);
 
-/*   sock = socket (AF_INET, SOCK_STREAM, 0); */
-/*   if (sock < 0) { */
-/*     perror ("Server: cannot open master socket"); */
-/*     exit (1); */
-/*   } */
-
-/*   master.sin_family = AF_INET; */
-/*   master.sin_addr.s_addr = INADDR_ANY; */
-/*   master.sin_port = htons (MY_PORT); */
-
-/*   if (bind (sock, (struct sockaddr*) &master, sizeof (master))) { */
-/*     perror ("Server: cannot bind master socket"); */
-/*     exit (1); */
-/*   } */
-
-/*   listen (sock, 1); */
-
-/*   fromlength = sizeof (from); */
-/*   snew = accept (sock, (struct sockaddr*) & from, & fromlength); */
-/*   if (snew < 0) { */
-/*     perror ("Server: accept failed"); */
-/*     exit (1); */
-/*   } */
+  fromlength = sizeof (from);
+  snew = accept (sock, (struct sockaddr*) & from, & fromlength);
+  if (snew < 0) {
+    perror ("Server: accept failed");
+    exit (1);
+  }
 
 
-/*   // check for messages from client */
-/*   int w2 = read (snew, tmpStr2, 62); */
-/*   while (w2 < 0) { */
-/*     w2 = read (snew, tmpStr2, 62); */
-/*     printf("trying to read again \n"); */
-/*     sleep(5); */
-/*   } */
-/*   debugPrint("we got %s from client", tmpStr2); */
+  // check for messages from client
+  char * logMessage = malloc(200);
+  int w2 = read (snew, logMessage, 200);
+  while (w2 < 0) {
+    w2 = read (snew, logMessage, 200);
+    printf("trying to read again \n");
+    sleep(5);
+  }
+  debugPrint("we got %s from client \n", logMessage);
 
-/* } */
+
+  if (logMessage[0] == '[') {
+    debugPrint("request for logging received \n");
+    FILE *logFile;
+    logFile = fopen(getenv("PROCNANNYLOGS"), "a");    
+
+    debugPrint("logging this: %s \n", logMessage);    
+    char * newLogMessage = trimwhitespace(logMessage);
+    fputs(newLogMessage, logFile);
+    fputs("\n",logFile);
+    fclose(logFile);
+    
+    return 0;
+  }
+
+  free(logMessage);
+  return 1;
+
+
+}
 
 
 
@@ -135,12 +162,6 @@ int main(int argc, char * argv[]) {
     exit (1);
   }
 
-
-  char * tmpStr23 = malloc(62);
-
-  sprintf(tmpStr23, "%-20s#%20d!%20d", "top", 2, 2);
-  debugPrint("writing this to socket: %s \n", tmpStr23);
-  writeToClient(tmpStr23);
 
 
 
@@ -188,7 +209,6 @@ int main(int argc, char * argv[]) {
       }
     }
     
-    debugPrint("reread = %d\n", rereadFromConfigFile);
     while ((read1 = getline(&line, &len, fp2)) != -1 && rereadFromConfigFile == 1) {
       debugPrint("from parent: starting main while \n ");
 
@@ -201,38 +221,56 @@ int main(int argc, char * argv[]) {
 
       debugPrint("%s \n", processName);
       debugPrint("%d \n", processLifeSpan);
-      debugPrint("freeChildren is %d \n", freeChildren);
-      debugPrint("adding all  nodes \n");
-      
-      
-      // convert processName into PIDs
-      // pass PIDs, one by one, into a separate child
-      
-      debugPrint("beginning write to internet socket\n");
 
-      /* fromlength = sizeof (from); */
-      /* snew = accept (sock, (struct sockaddr*) & from, & fromlength); */
-      /* if (snew < 0) { */
-      /* 	perror ("Server: accept failed"); */
-      /* 	exit (1); */
-      /* } */
-      char * tmpStr = malloc(62);
-
-      sprintf(tmpStr, "%-20s#%20d!%20d", processName, 2, processLifeSpan);
-      //    debugPrint("child %d writing this to pipe: %s \n", getpid(), tmpStr);
-      /* writeToClient(tmpStr); */
-      /* char * tmpStr2 = malloc(62); */
-      /* readFromClient(tmpStr2); */
+      if (processList) { 
+	if ( searchNodes(processList, processName, processLifeSpan) == -1) {
+	  debugPrint("%d adding node \n", getpid());
+	  addNode(processList, processName, processLifeSpan);	  
+	}
+      }
+      else {
+	debugPrint("creating process list... %d processListing node \n", getpid());
+	processList = init(processName, processLifeSpan);
+      }
       
-  
-      debugPrint("finished writing to internet socket\n");
-      close (snew);
-      //fclose(fp2);
 
     }// while loop for reading file
 
     rereadFromConfigFile = -1;
+    while(keepLooping == 1) {
+
+      if (readFromClient() == 1) {
+	debugPrint("request for info received... sending\n");
+	debugPrint("beginning write to internet socket\n");
+	char * tmpStr = malloc(62);
+
+	snprintf(tmpStr, 62, "%-20s#%20d!%20d", "null", getSize(processList), 1);
+	debugPrint("writing this to pipe: %s \n", tmpStr);
+	writeToClient(tmpStr);
+	struct node * currentNode = processList;
+	while (currentNode != NULL) {
+	  
+	  snprintf(tmpStr, 62, "%-20s#%20d!%20d", currentNode->value, 11, currentNode->key);
+	  debugPrint("writing this to pipe: %s \n", tmpStr);
+	  writeToClient(tmpStr);	  
+	  currentNode = currentNode->next;
+	}
+      
+  
+	debugPrint("finished writing to internet socket\n");
+	close (snew);
+	//fclose(fp2);
+
+	  
+      }
+	
+    }
+      
+
     sleep(5);
+    //debugPrint("reread = %d\n", rereadFromConfigFile);
+    //debugPrint("trying to read from client...\n");
+    //    readFromClient();
 
 
     
@@ -250,10 +288,10 @@ int main(int argc, char * argv[]) {
   }
       
   char * message;
-  message = malloc(300);
+  message = malloc(200);
 
   printf("Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled);
-  snprintf(message, 290, "Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled);
+  snprintf(message, 190, "Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled);
   writeToLogs("Info", message);
 
   free(message);
@@ -324,16 +362,19 @@ void clearLogs() {
 
 void writeToLogs(char * logLevel, char * message) {
   FILE *logFile;
-  char * logMessage = malloc(400);
+  char * logMessage = malloc(200);
   logFile = fopen(getenv("PROCNANNYLOGS"), "a");    
     
   char * dateVar = malloc(50);
   getDate(dateVar);
-  snprintf(logMessage, 390, "[%s] %s: %s", dateVar, logLevel, message);
+  
+  snprintf(logMessage, 190, "[%s] %s: %s", dateVar, logLevel, message);
+  char *newLogMessage = trimwhitespace(logMessage);
   //fprintf(logFile, "[%s] %s: %s", dateVar, logLevel, message);
-  fputs(logMessage, logFile);
+  fputs(newLogMessage, logFile);
   free(dateVar);
   free(logMessage);
+  free(newLogMessage);
   fclose(logFile);
   
 }

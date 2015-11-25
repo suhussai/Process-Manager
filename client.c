@@ -65,28 +65,32 @@ void debugPrint(char * message,...);
 
 
 
-/* void writeToServer(char * message) { */
+void writeToServer(char * message) {
+  // message is 400 size log message complete with log level
   
-/*   s = socket (AF_INET, SOCK_STREAM, 0); */
+  s = socket (AF_INET, SOCK_STREAM, 0);
 
-/*   if (s < 0) { */
-/*     perror ("Client: cannot open socket"); */
-/*     exit (1); */
-/*   } */
+  if (s < 0) {
+    perror ("Client: cannot open socket");
+    exit (1);
+  }
 
-/*   bzero (&server, sizeof (server)); */
-/*   bcopy (host->h_addr, & (server.sin_addr), host->h_length); */
-/*   server.sin_family = host->h_addrtype; */
-/*   server.sin_port = htons (MY_PORT); */
+  bzero (&server, sizeof (server));
+  bcopy (host->h_addr, & (server.sin_addr), host->h_length);
+  server.sin_family = host->h_addrtype;
+  server.sin_port = htons (MY_PORT);
 
-/*   if (connect (s, (struct sockaddr*) & server, sizeof (server))) { */
-/*     perror ("Client: cannot connect to server"); */
-/*     exit (1); */
-/*   } */
-		
-/*   write (s, message, 62); */
-  
-/* } */
+  if (connect (s, (struct sockaddr*) & server, sizeof (server))) {
+    perror ("Client: cannot connect to server");
+    exit (1);
+  }
+	
+  char * longMessage = malloc(200);
+  snprintf(longMessage, 200, "%-200s", message);
+  debugPrint("sending this to server %s \n", longMessage);
+  write (s, longMessage, 200);
+  debugPrint("sent long message to server\n");
+}
 
 
 void readFromServer(char * message) {
@@ -117,11 +121,12 @@ void readFromServer(char * message) {
 
 
 void writeToLogs(char * logLevel, char * message) {
-  char * logMessage = malloc(400);
+  char * logMessage = malloc(200);
     
   char * dateVar = malloc(50);
   getDate(dateVar);
-  snprintf(logMessage, 390, "[%s] %s: %s", dateVar, logLevel, message);
+  snprintf(logMessage, 190, "[%s] %s: %s\n", dateVar, logLevel, message);
+  writeToServer(logMessage);
   //fprintf(logFile, "[%s] %s: %s", dateVar, logLevel, message);
   //  write(s, logMessage, sizeof(logMessage));
   //  fputs(logMessage, logFile);
@@ -245,9 +250,9 @@ void monitorProcess(char * processName, int processLifeSpan) {
   if ((numberOfPIDs = getNumberOfPIDsForProcess(processName))  < 1) {
     debugPrint("no processes %s found \n", processName);
     char * message;
-    message = malloc(300);
+    message = malloc(200);
 
-    snprintf(message, 290, "No '%s' processes found. \n", processName);
+    snprintf(message, 190, "No '%s' processes found. \n", processName);
     writeToLogs("Info", message);
       
     free(message);
@@ -257,7 +262,7 @@ void monitorProcess(char * processName, int processLifeSpan) {
   debugPrint("we are parent: %d \n", getpid());
   debugPrint("for %d %s we have  the number of PIDs is equal to %d \n", getpid(), processName, numberOfPIDs);
   PIDs = malloc(numberOfPIDs + 100);
-  message = malloc(300);
+  message = malloc(200);
   startOfMessage = message;
 
   getPIDs(processName, PIDs, numberOfPIDs);
@@ -324,7 +329,7 @@ void monitorProcess(char * processName, int processLifeSpan) {
       
       // close(newProcessToChild[0]);
       char tmpStr[62];
-      sprintf(tmpStr, "%-20s#%20d!%20d", processName, PIDs[counter], processLifeSpan);
+      snprintf(tmpStr, 62, "%-20s#%20d!%20d", processName, PIDs[counter], processLifeSpan);
       write(newProcessToChild[1], tmpStr, 62);
 
 
@@ -423,7 +428,7 @@ void dispatch(int parentPid, char * processName, int processPID, int processLife
       close(killCountPipe[0]);
       char tmpStr[62];
 
-      sprintf(tmpStr, "%-20s#%20d!%20d", newProcessName, processPID, processLifeSpan);
+      snprintf(tmpStr, 62, "%-20s#%20d!%20d", newProcessName, processPID, processLifeSpan);
       //    debugPrint("child %d writing this to pipe: %s \n", getpid(), tmpStr);
       int w = write(killCountPipe[1], tmpStr, 62);
       while (w != 62) {
@@ -451,7 +456,7 @@ void dispatch(int parentPid, char * processName, int processPID, int processLife
       close(killCountPipe[0]);
       char tmpStr[62];
 
-      sprintf(tmpStr, "%-20s#%20d!%20d", processName, processPID, processLifeSpan);
+      snprintf(tmpStr, 62, "%-20s#%20d!%20d", processName, processPID, processLifeSpan);
       //    debugPrint("child %d writing this to pipe: %s \n", getpid(), tmpStr);
       int w = write(killCountPipe[1], tmpStr, 62);
       while (w != 62) {
@@ -538,6 +543,73 @@ char *trimwhitespace(char *str)
   return str;
 }
 
+void updateKillCount() {
+
+  // reads pipe killCountPipe for message indicating the kills
+  // process have committed and updates 
+  // parent-controlled totalProcsKilled variable
+  
+  /* read message start */
+  //  debugPrint("from parent preparing to log messages \n");
+
+
+  //close(killCountPipe[1]);
+  char * pipeBuffer= malloc(62);
+  debugPrint("updating kill...\n");
+
+  if (read(killCountPipe[0], pipeBuffer, 62) <= 0) {
+    debugPrint("found nothing on killCount pipe, returning\n");
+    free(pipeBuffer);
+    return;
+  }
+
+  char * tmpBuffer = pipeBuffer;
+  
+  char * inputBuffer = malloc(150);
+  char * processName;
+  int len = 0;
+  int PID = 0;
+  int processLifeSpan = 0;
+
+
+  len = strchr(pipeBuffer,'#') - pipeBuffer;
+  processName = malloc(len+1);
+  strncpy(processName, pipeBuffer, len);
+  processName[len] = '\0'; 
+
+  processName[strlen(processName) - 1] = '\0';
+
+  
+  pipeBuffer = strchr(pipeBuffer,'#');
+  PID = atoi(pipeBuffer+1);
+  processLifeSpan = atoi(strchr(pipeBuffer,'!')+1);
+
+  char *newP = trimwhitespace(processName);
+  debugPrint("results from updateKillCount pipe read\n");
+  debugPrint("name: %s|| \n", newP);
+  debugPrint("life span: %d \n", processLifeSpan);
+  debugPrint("pid: %d \n", PID);
+
+
+  if (searchNodes(monitoredPIDs, newP, PID) != -1) {
+    debugPrint("NOT REALLYremoving pid that was killed.\n");
+    //removeNode(monitoredPIDs, newP, PID);    
+  }
+
+  totalProcsKilled++;
+  
+  debugPrint("PID (%d) (%s) killed after exceeding %d seconds. \n", PID, processName, processLifeSpan);
+  snprintf(inputBuffer, 150, "PID (%d) (%s) killed after exceeding %d seconds. \n", PID, processName, processLifeSpan);
+  writeToLogs("Action", inputBuffer);
+  
+
+  free(tmpBuffer);
+  free(inputBuffer);
+  free(processName);  
+  freeChildren = freeChildren + 1;  
+}
+
+
 
 int main(int argc, char * argv[]) {
 
@@ -561,29 +633,34 @@ int main(int argc, char * argv[]) {
   host = gethostbyname (argv[1]);
 
 
-
+  int firstTime = 1;
   if (host == NULL) {
     perror ("Client: cannot get host description");
     exit (1);
   }
+
   char * pipeBuffer = malloc(62);
-  while (1) {
+  /* char * procInfoRequest = malloc(200); */
+  /* snprintf(procInfoRequest,200, "%-200s", procInfoString); */
+  /* char * a = "test\0"; */
+  char a[200] = "test";
+  
+  while (keepLooping == 1) {
     // use this loop to get process lists
 
 
     debugPrint("reading from server\n");
+    writeToServer(a);
     readFromServer(pipeBuffer);
     debugPrint("got %s\n", pipeBuffer);
-
-    //    writeToServer("got it brah!!");
 
     //    char * tmpBuffer = pipeBuffer;
   
     char * processName;
     int len = 0;
-    int PID = 0;
+    int numberofProcesses = 0;
     int processLifeSpan = 0;
-
+    int PID = 0;
 
     len = strchr(pipeBuffer,'#') - pipeBuffer;
     processName = malloc(len+1);
@@ -594,23 +671,100 @@ int main(int argc, char * argv[]) {
 
   
     pipeBuffer = strchr(pipeBuffer,'#');
-    PID = atoi(pipeBuffer+1);
+    numberofProcesses = atoi(pipeBuffer+1);
     processLifeSpan = atoi(strchr(pipeBuffer,'!')+1);
+    debugPrint("server: we have  %d different procs to monitor\n", numberofProcesses);
+    //    free(processName);
+    while(numberofProcesses > 0) {
+      //      char * processName = NULL;
+      len = 0;
+      processLifeSpan = 0;
+      PID = 0;
+      numberofProcesses--;
 
-    char *newP = trimwhitespace(processName);
-    printf("results from updateKillCount pipe read\n");
-    printf("name: %s \n", newP);
-    printf("life span: %d \n", processLifeSpan);
-    printf("pid: %d \n", PID);
-    close (s);
-    fprintf (stderr, "Process %d gets number %s\n", getpid (),
-	     pipeBuffer);
-    while (1) {
-      monitorProcess(newP, processLifeSpan);
-      sleep (5);
-      
+      readFromServer(pipeBuffer);
+
+      len = strchr(pipeBuffer,'#') - pipeBuffer;
+      //processName = (char *)realloc(processName, len+1);
+      strncpy(processName, pipeBuffer, len);
+      processName[len] = '\0'; 
+
+      processName[strlen(processName) - 1] = '\0';
+
+  
+      pipeBuffer = strchr(pipeBuffer,'#');
+      PID = atoi(pipeBuffer+1);
+      processLifeSpan = atoi(strchr(pipeBuffer,'!')+1);
+
+
+      char *newP = trimwhitespace(processName);
+
+      debugPrint("for PID = %d\n", PID);
+      debugPrint("name: %s \n", newP);
+      debugPrint("life span: %d \n", processLifeSpan);
+      debugPrint("pid: %d \n", PID);
+      close (s);
+      debugPrint("Process %d got %s\n", getpid (),
+	       pipeBuffer);
+
+      if (processList) { 
+	if ( searchNodes(processList, newP, processLifeSpan) == -1) {
+	  debugPrint("%d adding node \n", getpid());
+	  addNode(processList, newP, processLifeSpan);	  
+	}
+      }
+      else {
+	debugPrint("creating process list... %d processListing node \n", getpid());
+	processList = init(newP, processLifeSpan);
+      }
+
+      debugPrint("finished setting/looking thro processList\n");
+    }
+
+
+    sleep (5);
+    updateKillCount();
+    debugPrint("********************\n");
+
+    debugPrint("number of freechildren is %d: \n", freeChildren);
+    debugPrint("number of messages from children is %d: \n", messagesFromChildren);
+    struct node * cursorNode;
+    int i = 0;
+    debugPrint("processes we monitored are: \n");
+    cursorNode = monitoredPIDs;
+    if (monitoredPIDs) {
+      for (i = 0; i < getSize(monitoredPIDs); i++) {
+	debugPrint("value: %s, key: %d\n", cursorNode->value, cursorNode->key);
+	cursorNode = cursorNode->next;
+      }
       
     }
+
+
+    debugPrint("process we got are: \n");
+
+    cursorNode = processList;
+
+    for (i = 0; i < getSize(processList); i++) {
+      debugPrint("for %s, %d \n",cursorNode->value, cursorNode->key);
+
+      if (getNumberOfPIDsForProcess(cursorNode->value) > 0 || firstTime == 1) {
+	debugPrint("calling monitorProcess \n");
+	monitorProcess(cursorNode->value, cursorNode->key);   	
+      }
+      else {
+	debugPrint("NOT calling monitorProcess \n");
+	debugPrint("No %s proc found.\n", cursorNode->value);
+      }
+
+      cursorNode = cursorNode->next;
+    }
+    firstTime = 0;
+    debugPrint("done listing processes in processList\n");
+
+
+      
+      
   }
   
   return 0;
