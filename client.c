@@ -65,6 +65,47 @@ void debugPrint(char * message,...);
 
 
 
+// kill previous procnannies
+void killOldProcNannies()  {
+  int numberOfProcNanniePIDs = getNumberOfPIDsForProcess("procnanny.cli");
+  debugPrint("found %d old procnanny clients\n", numberOfProcNanniePIDs);
+  while (getNumberOfPIDsForProcess("procnanny.cli") == 0) {
+    debugPrint("found %d old procnanny clients\n", numberOfProcNanniePIDs);
+    sleep(2);
+  }
+  if (numberOfProcNanniePIDs > 1) {
+    char * inputBuffer = malloc(150);
+    FILE * fp;
+    //printf("found %d processes of procnanny running. Commencing deletion... \n", numberOfProcNanniePIDs);
+    int * procNanniePIDs = malloc(numberOfProcNanniePIDs + 50);
+    getPIDs("procnanny.cli", procNanniePIDs, numberOfProcNanniePIDs);
+
+    // remove current pid
+    int currentProcPID = getpid();
+    int tmpCounter = 0;
+    for (tmpCounter = 0; tmpCounter < numberOfProcNanniePIDs; tmpCounter = tmpCounter + 1) {
+      if (currentProcPID != procNanniePIDs[tmpCounter]) {
+	snprintf(inputBuffer, 140, "kill -9 %d", procNanniePIDs[tmpCounter]);
+	//printf("%s \n", inputBuffer);
+
+	if ((fp = popen(inputBuffer, "r")) != NULL) {
+	  snprintf(inputBuffer, 120, "An old procnanny.client (%d) was killed \n",  procNanniePIDs[tmpCounter]);
+	  writeToLogs("Warning", inputBuffer);
+	}
+
+      }
+    }
+
+
+    free(inputBuffer);
+    free(procNanniePIDs);
+  }
+  
+}
+
+
+
+
 void writeToServer(char * message) {
   // message is 200 size log message complete with log level
   
@@ -550,7 +591,8 @@ void updateKillCount() {
 
 
 int main(int argc, char * argv[]) {
-
+  
+  killOldProcNannies();
   debugPrint("staring main\n");
   if (pipe(newProcessToChild) < 0) {
     fprintf(stderr,"pipe error");
