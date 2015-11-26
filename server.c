@@ -291,16 +291,15 @@ struct con * get_free_conn()
  */
 void closecon (struct con *cp, int initflag)
 {
-	if (!initflag) {
-		if (cp->sd != -1)
-			close(cp->sd); /* close the socket */
-		free(cp->buf); /* free up our buffer */
-	}
-	memset(cp, 0, sizeof(struct con)); /* zero out the con struct */
-	cp->buf = NULL; /* unnecessary because of memset above, but put here
-			 * to remind you NULL is 0.
-			 */
-	cp->sd = -1;
+  if (!initflag) {
+    if (cp->sd != -1)
+      close(cp->sd); /* close the socket */
+  }
+  memset(cp, 0, sizeof(struct con)); /* zero out the con struct */
+  cp->buf = NULL; /* unnecessary because of memset above, but put here
+		   * to remind you NULL is 0.
+		   */
+  cp->sd = -1;
 }
 
 /* ***REMOVED*** */
@@ -361,6 +360,7 @@ int readFromClient2(struct con *cp) {
     // client disconnected according to 
     // http://stackoverflow.com/questions/2416944/can-read-function-on-a-connected-socket-return-zero-bytes
     closecon(cp, 0);
+    free(logMessage);
     return -1;
   }
   debugPrint("we got %s from client \n", logMessage);
