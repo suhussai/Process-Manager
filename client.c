@@ -209,7 +209,6 @@ void monitorProcess(char * processName, int processLifeSpan) {
 
   debugPrint("startin monitor Process for %s \n", processName);
   char * message;
-  char * startOfMessage;
   int * PIDs;
   int counter = 0;
   int pid = 0;
@@ -219,10 +218,9 @@ void monitorProcess(char * processName, int processLifeSpan) {
   // check to make sure process "processName" is still active
   if ((numberOfPIDs = getNumberOfPIDsForProcess(processName))  < 1) {
     debugPrint("no processes %s found \n", processName);
-    char * message;
     message = malloc(200);
 
-    snprintf(message, 190, "No '%s' processes found. \n", processName);
+    snprintf(message, 190, "No '%s' processes found ", processName);
     writeToLogs("Info", message);
       
     free(message);
@@ -233,41 +231,11 @@ void monitorProcess(char * processName, int processLifeSpan) {
   debugPrint("for %d %s we have  the number of PIDs is equal to %d \n", getpid(), processName, numberOfPIDs);
   PIDs = malloc(numberOfPIDs + 100);
   message = malloc(200);
-  startOfMessage = message;
 
   getPIDs(processName, PIDs, numberOfPIDs);
 
   // print out messages to logs regarding which
   // processes are being monitored
-  for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
-
-    if (monitoredPIDs != NULL && searchNodes(monitoredPIDs, processName, PIDs[counter]) != -1) {
-      // only call monitor process if
-      // process has more than 0 pids active
-      // and it is not in monitoredPIDs linked list
-      // ie it is not being monitored already
-      debugPrint("process %s with pid %d is already being monitored \n", processName, PIDs[counter]);
-      continue;
-    }
-
-
-    // during first loop
-    if (counter == 0) {
-      message += sprintf(message, "Initializing monitoring of process '%s' (%d", processName, PIDs[counter]);
-    }
-    // default loop
-    else {
-      message += sprintf(message, ", %d", PIDs[counter]);
-    }
-
-    // during last loop
-    if (counter + 1 == numberOfPIDs) {
-      message += sprintf(message, ") \n");
-      message = startOfMessage;
-      //      writeToLogs("Info", message);
-
-    }
-  }
 
 
   for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
@@ -281,6 +249,8 @@ void monitorProcess(char * processName, int processLifeSpan) {
       continue;
     }
 
+    snprintf(message, 200, "Initializing monitoring of process '%s' (PID %d)", processName, PIDs[counter]);
+    writeToLogs("Info", message);
 
     debugPrint("adding pid %d to list \n", PIDs[counter]);
     if (monitoredPIDs) {
@@ -560,7 +530,7 @@ void updateKillCount() {
   totalProcsKilled++;
   
   debugPrint("PID (%d) (%s) killed after exceeding %d seconds. \n", PID, processName, processLifeSpan);
-  snprintf(inputBuffer, 150, "PID (%d) (%s) killed after exceeding %d seconds. \n", PID, processName, processLifeSpan);
+  snprintf(inputBuffer, 150, "PID (%d) (%s) killed after exceeding %d seconds ", PID, processName, processLifeSpan);
   writeToLogs("Action", inputBuffer);
 
 

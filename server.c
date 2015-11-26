@@ -111,6 +111,7 @@ struct sigaction sa;
 int rereadFromConfigFile = 1;
 int parentPid = 0;
 struct node * processList;
+struct node * clientNames;
 struct node * monitoredPIDs;
 struct node * childPIDs;
 int messagesFromChildren = 0;
@@ -126,6 +127,17 @@ void debugPrint(char * message,...);
 void writeToLogs(char * logLevel, char * message);
 void clearLogs();
 void getDate(char * dateVar);
+
+void extractClientNames(char * message) {
+  char * clientName = NULL;
+  clientName = strstr(message, "on node") + strlen("on node ");
+  if (clientNames == NULL) {
+    clientNames = init(clientName, 0);
+  }
+  else if (searchNodes(clientNames, clientName, 0) == -1){
+    addNode(clientNames, clientName, 0);
+  }
+}
 
 
 void writeToProcNannyServerInfo() {
@@ -165,8 +177,8 @@ void writeParentPIDToLogs()  {
   parentPIDMessage = malloc(300);
   int port = MY_PORT;
 
-  snprintf(parentPIDMessage, 290, "procnanny server: PID %d on %s, port %d. \n", getpid(), hostName, port);
-  writeToLogs("Info", parentPIDMessage);
+  snprintf(parentPIDMessage, 290, "PID %d on %s, port %d.", getpid(), hostName, port);
+  writeToLogs("procnanny server", parentPIDMessage);
       
   free(parentPIDMessage);
   free(hostName);
@@ -196,19 +208,6 @@ char *trimwhitespace(char *str)
 }
 
 void writeToClient2(char * message, struct con * cp) {
-
-  /* listen (cp->sd, 5); */
-  /* fromlength = sizeof (cp->sa); */
-  /* snew = accept (cp->sd, (struct sockaddr*) & cp->sa, & fromlength); */
-
-  /* while (snew < 0) { */
-  /*   listen (sock, 5); */
-  /*   fromlength = sizeof (cp->sa); */
-  /*   snew = accept (cp->sd, (struct sockaddr*) & cp->sa, & fromlength); */
-  /*   perror ("Server: accept failed"); */
-  /* } */
-
-  // put cp->sd into fd_set 
 
   
   int w = write(cp->sd, message, 63);
@@ -280,6 +279,7 @@ int readFromClient() {
 
     debugPrint("logging this: %s \n", logMessage);    
     char * newLogMessage = trimwhitespace(logMessage);
+    extractClientNames(logMessage);
     fputs(newLogMessage, logFile);
     fputs("\n",logFile);
     fclose(logFile);
@@ -328,6 +328,7 @@ int readFromClient2(struct con *cp) {
 
     debugPrint("logging this: %s \n", logMessage);    
     char * newLogMessage = trimwhitespace(logMessage);
+    extractClientNames(newLogMessage);
     fputs(newLogMessage, logFile);
     fputs("\n",logFile);
     fclose(logFile);
@@ -647,7 +648,6 @@ int main(int argc, char * argv[]) {
 	      FD_ISSET(connections[i].sd, readable)) {
 	    // something is readable
 	    if (readFromClient2(&connections[i]) == 1) {
-	      connectionWeSendMessageTo = i;
 
 
 	      // writing
@@ -709,15 +709,26 @@ int main(int argc, char * argv[]) {
   char * message;
   message = malloc(200);
 
-  printf("Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled);
-  snprintf(message, 190, "Caught SIGINT. Exiting cleanly. %d process(es) killed. \n", totalProcsKilled);
-  writeToLogs("Info", message);
+  //  printf("Caught SIGINT. Exiting cleanly. %d process(es) killed on ", totalProcsKilled);
 
-  free(message);
+  char * pointerToMessage = message;
+  message += sprintf(message, "Caught SIGINT. Exiting cleanly. %d process(es) killed on", totalProcsKilled);
+  
+  struct node * currentNode = clientNames;
+  while(currentNode != NULL) {
+    message += sprintf(message, " %s,", currentNode->value);
+    currentNode = currentNode->next;
+  }
+  message = pointerToMessage;
+  printf("%s", message);
+  writeToLogs("Info", pointerToMessage);
 
+  //  free(message);
+  free(pointerToMessage);
   fclose(fp2);
   free(lastMessage);
   freeList(processList);
+  freeList(clientNames);
   return 0;
 }
 
@@ -794,6 +805,7 @@ void writeToLogs(char * logLevel, char * message) {
   char *newLogMessage = trimwhitespace(logMessage);
   //fprintf(logFile, "[%s] %s: %s", dateVar, logLevel, message);
   fputs(newLogMessage, logFile);
+  fputs("\n", logFile);
   free(dateVar);
   free(logMessage);
   //  free(newLogMessage);
