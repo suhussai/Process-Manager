@@ -132,14 +132,14 @@ int getNumberOfPIDsForProcess(char * processName);
 
 // kill previous procnannies
 void killOldProcNannies()  {
-  int numberOfProcNanniePIDs = getNumberOfPIDsForProcess("procnanny.server");
+  int numberOfProcNanniePIDs = getNumberOfPIDsForProcess("procnanny.ser");
   
   if (numberOfProcNanniePIDs > 1) {
     char * inputBuffer = malloc(150);
     FILE * fp;
     //printf("found %d processes of procnanny running. Commencing deletion... \n", numberOfProcNanniePIDs);
     int * procNanniePIDs = malloc(numberOfProcNanniePIDs + 50);
-    getPIDs("procnanny.server", procNanniePIDs, numberOfProcNanniePIDs);
+    getPIDs("procnanny.ser", procNanniePIDs, numberOfProcNanniePIDs);
 
     // remove current pid
     int currentProcPID = getpid();
@@ -244,72 +244,6 @@ char *trimwhitespace(char *str)
   return str;
 }
 
-void writeToClient2(char * message, struct con * cp) {
-
-  
-  int w = write(cp->sd, message, 63);
-  debugPrint("wrote %d b's which was %s\n", w, message);
-  while (w != 63) {
-    w = write (snew, message, 63);
-    printf("trying to write again cuz we wrote %d \n", w);
-    sleep(5);
-  }
-  
-}
-
-
-
-
-int readFromClient2(struct con *cp) {
-  // returns 1 meaning send process name and lifespan
-  // else do nothing
-
-
-  // check for messages from client
-
-  char * logMessage = malloc(200);
-  int w2 = read (cp->sd, logMessage, 200);
-  //  close(snew);
-  while (w2 < 0) {
-    w2 = read (snew, logMessage, 200);
-    printf("trying to read again \n");
-    sleep(5);
-  }
-  debugPrint("we got %s from client \n", logMessage);
-
-
-  if (logMessage[0] == '[') {
-    debugPrint("request for logging received \n");
-    FILE *logFile;
-    logFile = fopen(getenv("PROCNANNYLOGS"), "a");    
-
-    debugPrint("logging this: %s \n", logMessage);    
-    char * newLogMessage = trimwhitespace(logMessage);
-    extractClientNames(newLogMessage);
-    fputs(newLogMessage, logFile);
-    fputs("\n",logFile);
-    fclose(logFile);
-    free(logMessage);
-    return 0;
-  }
-  else if (logMessage[0] == 'k') {
-    logMessage[0] = '0';
-    debugPrint("updating kill count: %s\n", logMessage);
-    totalProcsKilled += atoi(logMessage);
-    debugPrint("new kill count %d\n", totalProcsKilled);
-    free(logMessage);
-    return 0;
-  }
-
-  else {
-    free(logMessage);
-    return 1;
-  }
-  
-
-}
-
-
 
 
 /* --------------------------------------------------------------------- */
@@ -389,6 +323,81 @@ int getPortNumber( int socketNum )
 	/* Note cast and the use of ntohs() */
 	return( (int) ntohs( addr.sin_port ) );
 } /* getPortNumber */
+
+
+
+void writeToClient2(char * message, struct con * cp) {
+
+  
+  int w = write(cp->sd, message, 63);
+  debugPrint("wrote %d b's which was %s\n", w, message);
+  while (w != 63) {
+    w = write (snew, message, 63);
+    printf("trying to write again cuz we wrote %d \n", w);
+    sleep(5);
+  }
+  
+}
+
+
+
+
+int readFromClient2(struct con *cp) {
+  // returns 1 meaning send process name and lifespan
+  // else do nothing
+
+
+  // check for messages from client
+
+  char * logMessage = malloc(200);
+  int w2 = read (cp->sd, logMessage, 200);
+  //  close(snew);
+  while (w2 < 0) {
+    w2 = read (snew, logMessage, 200);
+    printf("trying to read again \n");
+    sleep(5);
+  }
+  if (w2 == 0) {
+    // client disconnected according to 
+    // http://stackoverflow.com/questions/2416944/can-read-function-on-a-connected-socket-return-zero-bytes
+    closecon(cp, 0);
+    return -1;
+  }
+  debugPrint("we got %s from client \n", logMessage);
+
+
+  if (logMessage[0] == '[') {
+    debugPrint("request for logging received \n");
+    FILE *logFile;
+    logFile = fopen(getenv("PROCNANNYLOGS"), "a");    
+
+    debugPrint("logging this: %s \n", logMessage);    
+    char * newLogMessage = trimwhitespace(logMessage);
+    extractClientNames(newLogMessage);
+    fputs(newLogMessage, logFile);
+    fputs("\n",logFile);
+    fclose(logFile);
+    free(logMessage);
+    return 0;
+  }
+  else if (logMessage[0] == 'k') {
+    logMessage[0] = '0';
+    debugPrint("updating kill count: %s\n", logMessage);
+    totalProcsKilled += atoi(logMessage);
+    debugPrint("new kill count %d\n", totalProcsKilled);
+    free(logMessage);
+    return 0;
+  }
+
+  else {
+    free(logMessage);
+    return 1;
+  }
+  
+
+}
+
+
 
 
 
@@ -605,7 +614,8 @@ int main(int argc, char * argv[]) {
 	  if (connections[i].state == STATE_READING &&
 	      FD_ISSET(connections[i].sd, readable)) {
 	    // something is readable
-	    if (readFromClient2(&connections[i]) == 1) {
+	    int readFromClientReturnValue = readFromClient2(&connections[i]);
+	    if (readFromClientReturnValue == 1) {
 
 
 	      // writing
