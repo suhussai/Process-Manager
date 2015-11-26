@@ -127,6 +127,43 @@ void debugPrint(char * message,...);
 void writeToLogs(char * logLevel, char * message);
 void clearLogs();
 void getDate(char * dateVar);
+void getPIDs(char * processName, int * PIDs, int numberOfPIDs);
+int getNumberOfPIDsForProcess(char * processName);
+
+// kill previous procnannies
+void killOldProcNannies()  {
+  int numberOfProcNanniePIDs = getNumberOfPIDsForProcess("procnanny.server");
+  
+  if (numberOfProcNanniePIDs > 1) {
+    char * inputBuffer = malloc(150);
+    FILE * fp;
+    //printf("found %d processes of procnanny running. Commencing deletion... \n", numberOfProcNanniePIDs);
+    int * procNanniePIDs = malloc(numberOfProcNanniePIDs + 50);
+    getPIDs("procnanny.server", procNanniePIDs, numberOfProcNanniePIDs);
+
+    // remove current pid
+    int currentProcPID = getpid();
+    int tmpCounter = 0;
+    for (tmpCounter = 0; tmpCounter < numberOfProcNanniePIDs; tmpCounter = tmpCounter + 1) {
+      if (currentProcPID != procNanniePIDs[tmpCounter]) {
+	snprintf(inputBuffer, 140, "kill -9 %d", procNanniePIDs[tmpCounter]);
+	//printf("%s \n", inputBuffer);
+
+	if ((fp = popen(inputBuffer, "r")) != NULL) {
+	  snprintf(inputBuffer, 120, "An old procnanny.server (%d) was killed \n",  procNanniePIDs[tmpCounter]);
+	  writeToLogs("Warning", inputBuffer);
+	}
+
+      }
+    }
+
+
+    free(inputBuffer);
+    free(procNanniePIDs);
+  }
+  
+}
+
 
 void extractClientNames(char * message) {
   char * clientName = NULL;
@@ -222,86 +259,6 @@ void writeToClient2(char * message, struct con * cp) {
 
 
 
-void writeToClient(char * message) {
-  listen (sock, 5);
-  fromlength = sizeof (from);
-  snew = accept (sock, (struct sockaddr*) & from, & fromlength);
-
-  while (snew < 0) {
-    listen (sock, 5);
-    fromlength = sizeof (from);
-    snew = accept (sock, (struct sockaddr*) & from, & fromlength);
-    perror ("Server: accept failed");
-  }
-  
-  int w = write(snew, message, 63);
-  debugPrint("wrote %d b's which was %s\n", w, message);
-  while (w != 63) {
-    w = write (snew, message, 63);
-    printf("trying to write again cuz we wrote %d \n", w);
-    sleep(5);
-  }
-  close(snew);
-
-  
-}
-
-
-int readFromClient() {
-  // returns 1 meaning send process name and lifespan
-  // else do nothing
-  listen (sock, 5);
-
-  fromlength = sizeof (from);
-  snew = accept (sock, (struct sockaddr*) & from, & fromlength);
-  while (snew < 0) {
-    perror ("Server: accept failed");
-    snew = accept (sock, (struct sockaddr*) & from, & fromlength);
-  }
-
-
-  // check for messages from client
-  char * logMessage = malloc(200);
-  int w2 = read (snew, logMessage, 200);
-  //  close(snew);
-  while (w2 < 0) {
-    w2 = read (snew, logMessage, 200);
-    printf("trying to read again \n");
-    sleep(5);
-  }
-  debugPrint("we got %s from client \n", logMessage);
-
-
-  if (logMessage[0] == '[') {
-    debugPrint("request for logging received \n");
-    FILE *logFile;
-    logFile = fopen(getenv("PROCNANNYLOGS"), "a");    
-
-    debugPrint("logging this: %s \n", logMessage);    
-    char * newLogMessage = trimwhitespace(logMessage);
-    extractClientNames(logMessage);
-    fputs(newLogMessage, logFile);
-    fputs("\n",logFile);
-    fclose(logFile);
-    free(logMessage);
-    return 0;
-  }
-  else if (logMessage[0] == 'k') {
-    logMessage[0] = '0';
-    debugPrint("updating kill count: %s\n", logMessage);
-    totalProcsKilled += atoi(logMessage);
-    debugPrint("new kill count %d\n", totalProcsKilled);
-    free(logMessage);
-    return 0;
-  }
-
-  else {
-    free(logMessage);
-    return 1;
-  }
-  
-
-}
 
 int readFromClient2(struct con *cp) {
   // returns 1 meaning send process name and lifespan
@@ -439,6 +396,7 @@ int getPortNumber( int socketNum )
 int main(int argc, char * argv[]) {
   debugPrint("starting program\n");
   clearLogs();
+  killOldProcNannies();
   writeToProcNannyServerInfo();
   writeParentPIDToLogs();
   int max = -1, omax;
@@ -824,3 +782,68 @@ void getDate(char * dateVar) {
   }
   pclose(fpTemp);
 }
+
+
+int getNumberOfPIDsForProcess(char * processName) {
+  // populates PIDs with 
+  // the PIDs that correspond 
+  // to process processName
+
+  // returns size of int array containging 
+  // the PIDs.
+  // Use the size to walk through the array
+
+  FILE * fp;
+  char * numberOfPIDSbuffer = malloc(100);
+  char * numberOfPIDScommand = malloc(150);
+  int numberOfPIDs = -1;
+  snprintf(numberOfPIDScommand, 140, "ps -e | grep ' %s' | awk '{print $1}' | wc -l", processName);
+  //printf("%s \n", command);
+
+  fp = popen(numberOfPIDScommand, "r");
+  if (fp != NULL) {
+    fgets(numberOfPIDSbuffer, 15, fp);
+    numberOfPIDs = atoi(numberOfPIDSbuffer);
+    //printf("%s number of PIDs are %d \n", processName, numberOfPIDs);
+  }
+
+  pclose(fp);
+  free(numberOfPIDSbuffer);
+  free(numberOfPIDScommand);
+
+  return numberOfPIDs;
+  
+}
+
+void getPIDs(char * processName, int * PIDs, int numberOfPIDs) {
+  // populates PIDs with 
+  // the PIDs that correspond 
+  // to process processName
+
+  // Use numberOfPIDs to walk through the array
+
+  FILE * getPIDfp;
+  char * getPIDbuffer = malloc(100);
+  char * getPIDcommand = malloc(150);
+  int counter = 0;
+  PIDs[0] = -1; // default value
+  for (counter = 0; counter < numberOfPIDs; counter = counter + 1) {
+    snprintf(getPIDcommand, 140, "ps -e | grep ' %s' | awk '{print $1}' | tail -n %d | head -n 1", processName, numberOfPIDs - counter);
+    //printf("%s \n", command);
+
+    getPIDfp = popen(getPIDcommand, "r");
+    //    popen.wait();
+    if (getPIDfp != NULL) {
+      fgets(getPIDbuffer, 15, getPIDfp);
+      PIDs[counter] = atoi(getPIDbuffer);
+      //printf("%s process has PID %d \n", processName, PIDs[counter]);
+    }
+    pclose(getPIDfp);
+    
+  }
+
+  free(getPIDbuffer);
+  free(getPIDcommand);
+  
+}
+
