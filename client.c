@@ -66,66 +66,22 @@ void debugPrint(char * message,...);
 
 
 void writeToServer(char * message) {
-  // message is 400 size log message complete with log level
+  // message is 200 size log message complete with log level
   
-  s = socket (AF_INET, SOCK_STREAM, 0);
-
-  if (s < 0) {
-    perror ("Client: cannot open socket");
-    exit (1);
-  }
-
-  bzero (&server, sizeof (server));
-  bcopy (host->h_addr, & (server.sin_addr), host->h_length);
-  server.sin_family = host->h_addrtype;
-  server.sin_port = htons (MY_PORT);
-
-  while (connect (s, (struct sockaddr*) & server, sizeof (server))) {
-    perror ("Client: cannot connect to server");
-    debugPrint("Tring again\n");
-    //exit (1);
-  }
 	
   char * longMessage = malloc(200);
   snprintf(longMessage, 200, "%-200s", message);
   debugPrint("sending this to server %s \n", longMessage);
   write (s, longMessage, 200);
-  close(s);
   free(longMessage);
   debugPrint("sent long message to server\n");
 }
 
 
 void readFromServer(char * message) {
-  // stores message in ... message...
-  s = socket (AF_INET, SOCK_STREAM, 0);
-
-  if (s < 0) {
-    perror ("Client: cannot open socket");
-    exit (1);
-  }
-
-  bzero (&server, sizeof (server));
-  bcopy (host->h_addr, & (server.sin_addr), host->h_length);
-  server.sin_family = host->h_addrtype;
-  server.sin_port = htons (MY_PORT);
-
-  debugPrint("connecting...\n");
-
-  while (connect (s, (struct sockaddr*) & server, sizeof (server))) {
-    perror ("Client: cannot connect to server");
-
-    bzero (&server, sizeof (server));
-    bcopy (host->h_addr, & (server.sin_addr), host->h_length);
-    server.sin_family = host->h_addrtype;
-    server.sin_port = htons (MY_PORT);
-
-    debugPrint("connecting again...\n");
-  }
 	
   int rad = read (s, message, 63);
   debugPrint("we received %d b's this from server: %s\n",rad, message);
-  close(s);
   // caller needs to free message
   // http://stackoverflow.com/questions/11656532/returning-an-array-using-c
 }
@@ -558,15 +514,6 @@ char *trimwhitespace(char *str)
 }
 
 void updateKillCount() {
-
-  // reads pipe killCountPipe for message indicating the kills
-  // process have committed and updates 
-  // parent-controlled totalProcsKilled variable
-  
-  /* read message start */
-  //  debugPrint("from parent preparing to log messages \n");
-
-
   //close(killCountPipe[1]);
   char * pipeBuffer= malloc(63);
   debugPrint("updating kill...\n");
@@ -619,7 +566,7 @@ void updateKillCount() {
 
   debugPrint("sending message to update total kill count in server\n");
   char * killCountMessage = malloc(200);
-  snprintf(killCountMessage, 200, "k%-199d", totalProcsKilled);
+  snprintf(killCountMessage, 200, "k%-199d", 1);
   writeToServer(killCountMessage);
   debugPrint("sent kill count update!\n");
 
@@ -659,6 +606,27 @@ int main(int argc, char * argv[]) {
     perror ("Client: cannot get host description");
     exit (1);
   }
+
+  s = socket (AF_INET, SOCK_STREAM, 0);
+
+  if (s < 0) {
+    perror ("Client: cannot open socket");
+    exit (1);
+  }
+
+  bzero (&server, sizeof (server));
+  bcopy (host->h_addr, & (server.sin_addr), host->h_length);
+  server.sin_family = host->h_addrtype;
+  server.sin_port = htons (MY_PORT);
+
+  while (connect (s, (struct sockaddr*) & server, sizeof (server))) {
+    perror ("Client: cannot connect to server");
+    debugPrint("Tring again\n");
+    //exit (1);
+  }
+
+
+
 
   char * pipeBuffer = NULL;
   /* char * procInfoRequest = malloc(200); */
@@ -712,6 +680,17 @@ int main(int argc, char * argv[]) {
     numberofProcesses = atoi(pipeBuffer+1);
     processLifeSpan = atoi(strchr(pipeBuffer,'!')+1);
     debugPrint("server: we have  %d different procs to monitor\n", numberofProcesses);
+
+    if (processLifeSpan == 99) {
+      // 99 is the code indicating that the 
+      // server received a sighup
+      // so flush our linked list record
+      // of processes
+      if (processList) {
+	freeList(processList); // free it in case it is still set
+	processList = NULL;
+      }
+    }
 
     free(pointerToPipeBuffer);
     free(pointerToProcessName);
@@ -820,7 +799,7 @@ int main(int argc, char * argv[]) {
   }
   
   free(pipeBuffer);
-  free(processName);
+  //  free(processName);
   
   freeList(processList);
   freeList(monitoredPIDs);

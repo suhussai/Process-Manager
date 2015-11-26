@@ -16,6 +16,88 @@
 #include "memwatch.h" // for proper memory use checks
 #include <stdarg.h> // for variable argument support
 
+
+
+
+/*
+ * Copyright (c) 2008 Bob Beck <beck@obtuse.com>
+ * Some changes (related to the port number) by ***REMOVED***, March 2011.
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ */
+
+/*
+ * select_server.c - an example of using select to implement a non-forking
+ * server. In this case this is an "echo" server - it simply reads
+ * input from clients, and echoes it back again to them, one line at
+ * a time.
+ *
+ * to use, cc -DDEBUG -o select_server select_server.c
+ * or cc -o select_server select_server.c after you read the code :)
+ *
+ * then run with select_server PORT
+ * where PORT is some numeric port you want to listen on.
+ * (***REMOVED***:  You can also get the OS to choose the port by not specifying PORT)
+ *
+ * to connect to it, then use telnet or nc
+ * i.e.
+ * telnet localhost PORT
+ * or
+ * nc localhost PORT
+ * 
+ */
+
+
+#include <sys/param.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
+
+#include <netinet/in.h>
+
+#include <err.h>
+#include <errno.h>
+#include <limits.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+/* we use this structure to keep track of each connection to us */
+struct con {
+  int sd; 	/* the socket for this connection */
+  int state; 	/* the state of the connection */
+  struct sockaddr_in sa; /* the sockaddr of the connection */
+  size_t  slen;   /* the sockaddr length of the connection */
+  char *buf;	/* a buffer to store the characters read in */
+  char *bp;	/* where we are in the buffer */
+  size_t bs;	/* total size of the buffer */
+  size_t bl;	/* how much we have left to read/write */
+};
+
+int connectionWeSendMessageTo = -1;
+#define MAXCONN 2
+struct con connections[2]; 
+#define BUF_SIZE 63
+#define	MY_PORT	2222
+
+/* states used in struct con. */
+#define STATE_UNUSED 0
+#define STATE_READING 1
+#define STATE_WRITING 2
+
+
 #define	MY_PORT	2222
 
 int totalProcsKilled = 0;
@@ -36,6 +118,7 @@ int DEBUGGING = 1;
 int sock, snew;
 socklen_t fromlength;
 struct sockaddr_in master, from;
+int sighup_called = 0; // set to false 
 
 
 void sig_handler(int signum);
@@ -76,6 +159,33 @@ char *trimwhitespace(char *str)
   
   return str;
 }
+
+void writeToClient2(char * message, struct con * cp) {
+
+  /* listen (cp->sd, 5); */
+  /* fromlength = sizeof (cp->sa); */
+  /* snew = accept (cp->sd, (struct sockaddr*) & cp->sa, & fromlength); */
+
+  /* while (snew < 0) { */
+  /*   listen (sock, 5); */
+  /*   fromlength = sizeof (cp->sa); */
+  /*   snew = accept (cp->sd, (struct sockaddr*) & cp->sa, & fromlength); */
+  /*   perror ("Server: accept failed"); */
+  /* } */
+
+  // put cp->sd into fd_set 
+
+  
+  int w = write(cp->sd, message, 63);
+  debugPrint("wrote %d b's which was %s\n", w, message);
+  while (w != 63) {
+    w = write (snew, message, 63);
+    printf("trying to write again cuz we wrote %d \n", w);
+    sleep(5);
+  }
+  
+}
+
 
 
 void writeToClient(char * message) {
@@ -164,6 +274,7 @@ int readFromClient2(struct con *cp) {
 
 
   // check for messages from client
+
   char * logMessage = malloc(200);
   int w2 = read (cp->sd, logMessage, 200);
   //  close(snew);
@@ -217,83 +328,6 @@ int readFromClient2(struct con *cp) {
 /* --------------------------------------------------------------------- */
 
 
-
-/*
- * Copyright (c) 2008 Bob Beck <beck@obtuse.com>
- * Some changes (related to the port number) by ***REMOVED***, March 2011.
- *
- * Permission to use, copy, modify, and distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * select_server.c - an example of using select to implement a non-forking
- * server. In this case this is an "echo" server - it simply reads
- * input from clients, and echoes it back again to them, one line at
- * a time.
- *
- * to use, cc -DDEBUG -o select_server select_server.c
- * or cc -o select_server select_server.c after you read the code :)
- *
- * then run with select_server PORT
- * where PORT is some numeric port you want to listen on.
- * (***REMOVED***:  You can also get the OS to choose the port by not specifying PORT)
- *
- * to connect to it, then use telnet or nc
- * i.e.
- * telnet localhost PORT
- * or
- * nc localhost PORT
- * 
- */
-
-
-#include <sys/param.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/wait.h>
-
-#include <netinet/in.h>
-
-#include <err.h>
-#include <errno.h>
-#include <limits.h>
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
-/* we use this structure to keep track of each connection to us */
-struct con {
-	int sd; 	/* the socket for this connection */
-	int state; 	/* the state of the connection */
-	struct sockaddr_in sa; /* the sockaddr of the connection */
-	size_t  slen;   /* the sockaddr length of the connection */
-	char *buf;	/* a buffer to store the characters read in */
-	char *bp;	/* where we are in the buffer */
-	size_t bs;	/* total size of the buffer */
-	size_t bl;	/* how much we have left to read/write */
-};
-
-#define MAXCONN 2
-struct con connections[2]; 
-#define BUF_SIZE 63
-#define	MY_PORT	2222
-
-/* states used in struct con. */
-#define STATE_UNUSED 0
-#define STATE_READING 1
-#define STATE_WRITING 2
 
 
 
@@ -365,14 +399,16 @@ int getPortNumber( int socketNum )
 
 
 
+
 int main(int argc, char * argv[]) {
   debugPrint("starting program\n");
   clearLogs();
   writeParentPIDToLogs();
   int max = -1, omax;
-
   fd_set *readable = NULL;
-      
+  master.sin_family = AF_INET;
+  master.sin_addr.s_addr = INADDR_ANY;
+  master.sin_port = htons (MY_PORT);
 
   sock = socket (AF_INET, SOCK_STREAM, 0);
   if (sock < 0) {
@@ -380,20 +416,15 @@ int main(int argc, char * argv[]) {
     exit (1);
   }
 
-
-  master.sin_family = AF_INET;
-  master.sin_addr.s_addr = INADDR_ANY;
-  master.sin_port = htons (MY_PORT);
-
-
   if (bind (sock, (struct sockaddr*) &master, sizeof (master))) {
     perror ("Server: cannot bind master socket");
     exit (1);
   }
 
-
-
-
+  if (listen(sock, 5) == -1) {
+    perror("Server: cant listen");
+    exit(1);
+  }
 
   debugPrint("starting readAndExecute\n");
 
@@ -431,47 +462,53 @@ int main(int argc, char * argv[]) {
   
   while(rereadFromConfigFile == 1) {
 
+    while(keepLooping == 1) {
 
-    if (rereadFromConfigFile == 1) {
-      debugPrint("reread config file\n");
-      fp2 = fopen(fileName,"r");
-      if (fp2 == NULL) { 
-	clearLogs();
-	writeToLogs("Error", "Configuration file not found.\n");
-	fprintf(stderr,"Configuration file not found.\n");
-	exit(0); 
-      }
-    }
-    
-    while ((read1 = getline(&line, &len, fp2)) != -1 && rereadFromConfigFile == 1) {
-      debugPrint("from parent: starting main while \n ");
+      if (rereadFromConfigFile == 1) {
+	if (processList) {
+	  freeList(processList); // free it in case it is still set
+	  processList = NULL;
+	}
 
-    
-      char * tmp = strchr(line, delimiter);
-      processLifeSpan = atoi(tmp);
-      strncpy(line, line, strlen(line) - strlen(tmp));
-      line[strlen(line) - strlen(tmp)] = '\0'; // removes new line
-      processName = line;
-
-      debugPrint("%s \n", processName);
-      debugPrint("%d \n", processLifeSpan);
-
-      if (processList) { 
-	if ( searchNodes(processList, processName, processLifeSpan) == -1) {
-	  debugPrint("%d adding node \n", getpid());
-	  addNode(processList, processName, processLifeSpan);	  
+	debugPrint("reread config file\n");
+	fp2 = fopen(fileName,"r");
+	if (fp2 == NULL) { 
+	  clearLogs();
+	  writeToLogs("Error", "Configuration file not found.\n");
+	  fprintf(stderr,"Configuration file not found.\n");
+	  exit(0); 
 	}
       }
-      else {
-	debugPrint("creating process list... %d processListing node \n", getpid());
-	processList = init(processName, processLifeSpan);
-      }
+    
+      while ((read1 = getline(&line, &len, fp2)) != -1 && rereadFromConfigFile == 1) {
+	debugPrint("from parent: starting main while \n ");
+
+    
+	char * tmp = strchr(line, delimiter);
+	processLifeSpan = atoi(tmp);
+	strncpy(line, line, strlen(line) - strlen(tmp));
+	line[strlen(line) - strlen(tmp)] = '\0'; // removes new line
+	processName = line;
+
+	debugPrint("%s \n", processName);
+	debugPrint("%d \n", processLifeSpan);
+
+	if (processList) { 
+	  if ( searchNodes(processList, processName, processLifeSpan) == -1) {
+	    debugPrint("%d adding node \n", getpid());
+	    addNode(processList, processName, processLifeSpan);	  
+	  }
+	}
+	else {
+	  debugPrint("creating process list... %d processListing node \n", getpid());
+	  processList = init(processName, processLifeSpan);
+	}
       
 
-    }// while loop for reading file
+      }// while loop for reading file
 
-    rereadFromConfigFile = -1;
-    while(keepLooping == 1) {
+      rereadFromConfigFile = -1;
+
 
       int i = 0;
       int maxfd = -1;
@@ -488,7 +525,9 @@ int main(int argc, char * argv[]) {
 	/* we need bigger fd_sets allocated */
 
 	/* free the old ones - does nothing if they are NULL */
-	free(readable);
+	if (readable) {
+	  free(readable);	  
+	}
 
 	/*
 	 * this is how to allocate fd_sets for select
@@ -505,14 +544,12 @@ int main(int argc, char * argv[]) {
 	 */
 	memset(readable, 0, howmany(max+1, NFDBITS) *
 	       sizeof(fd_mask));
-	memset(writable, 0, howmany(max+1, NFDBITS) *
-	       sizeof(fd_mask));
       }
 
 
-      FD_SET(sd, readable);
-      if (maxfd < sd)
-	maxfd = sd;
+      FD_SET(sock, readable);
+      if (maxfd < sock)
+	maxfd = sock;
 
       /*
        * now go through the list of connections, and if we
@@ -527,21 +564,22 @@ int main(int argc, char * argv[]) {
 	  if (maxfd < connections[i].sd)
 	    maxfd = connections[i].sd;
 	}
+
       }
 
-      i = select(maxfd + 1, readable, writable, NULL,NULL);
+      i = select(maxfd + 1, readable, NULL, NULL,NULL);
       if (i == -1  && errno != EINTR)
 	err(1, "select failed");
       if (i > 0) {
 
-	if (FD_ISSET(sd, readable)) {
+	if (FD_ISSET(sock, readable)) {
 	  struct con *cp;
 	  int newsd;
 	  socklen_t slen;
 	  struct sockaddr_in sa;
 
 	  slen = sizeof(sa);
-	  newsd = accept(sd, (struct sockaddr *)&sa,
+	  newsd = accept(sock, (struct sockaddr *)&sa,
 			 &slen);
 	  if (newsd == -1)
 	    err(1, "accept failed");
@@ -569,88 +607,68 @@ int main(int argc, char * argv[]) {
 	  }
 	}
 	for (i = 0; i<MAXCONN; i++) {
-	  if ((connections[i].state == STATE_READING) &&
+	  if (connections[i].state == STATE_READING &&
 	      FD_ISSET(connections[i].sd, readable)) {
 	    // something is readable
 	    if (readFromClient2(&connections[i]) == 1) {
+	      connectionWeSendMessageTo = i;
+
+
+	      // writing
 	      debugPrint("request for info received... sending\n");
 	      debugPrint("beginning write to internet socket\n");
-	      snprintf(tmpStr, 63, "%-20s#%20d!%20d", "null", getSize(processList), 5);
+
+	      if (sighup_called == 1) {
+		snprintf(tmpStr, 63, "%-20s#%20d!%20d", "null", getSize(processList), 99);  
+		sighup_called = 0;
+	      }
+	      else {
+		snprintf(tmpStr, 63, "%-20s#%20d!%20d", "null", getSize(processList), 5);		
+	      }
+
 	      debugPrint("writing this to pipe: %s \n", tmpStr);
-	      writeToClient(tmpStr);
+	      int w2 = write(connections[i].sd, tmpStr, 63);
+	      debugPrint("w2 = %d\n", w2);
 	      sleep(0.5);
 	      struct node * currentNode = processList;
 	      while (currentNode != NULL) {
 	  
 		snprintf(tmpStr, 63, "%-20s#%20d!%20d", currentNode->value, 11, currentNode->key);
 		debugPrint("writing this to pipe: %s \n", tmpStr);
-		writeToClient(tmpStr);	  
+		int w3 = write(connections[i].sd, tmpStr, 63);
+		debugPrint("w3 = %d\n", w3);
+	    
 		currentNode = currentNode->next;
 	      }
       
   
 	      debugPrint("finished writing to internet socket\n");
-	      close (snew);
-	      //fclose(fp2);
-
-
 	    }
 
 	  }
 
+
 	}
 
       }
-
-
-
-      
-      
-      if (readFromClient() == 1) {
-	debugPrint("request for info received... sending\n");
-	debugPrint("beginning write to internet socket\n");
-	snprintf(tmpStr, 63, "%-20s#%20d!%20d", "null", getSize(processList), 5);
-	debugPrint("writing this to pipe: %s \n", tmpStr);
-	writeToClient(tmpStr);
-	sleep(0.5);
-	struct node * currentNode = processList;
-	while (currentNode != NULL) {
-	  
-	  snprintf(tmpStr, 63, "%-20s#%20d!%20d", currentNode->value, 11, currentNode->key);
-	  debugPrint("writing this to pipe: %s \n", tmpStr);
-	  writeToClient(tmpStr);	  
-	  currentNode = currentNode->next;
-	}
-      
-  
-	debugPrint("finished writing to internet socket\n");
-	close (snew);
-	//fclose(fp2);
-
-	  
-      }
-	
     }
     free(tmpStr);
+
+    if (readable) {
+      free(readable);	  
+    }
+
       
-
-    //    sleep(5);
-    //debugPrint("reread = %d\n", rereadFromConfigFile);
-    //debugPrint("trying to read from client...\n");
-    //    readFromClient();
-
-
-    
   }
 
   debugPrint("server receieved sigint, signalling clients...\n");
-  readFromClient();
   char * lastMessage = malloc(63);
-
   snprintf(lastMessage, 63, "!%-19s#%20d!%20d", "null", 1, 5);
   debugPrint("writing lastMessage to pipe: %s \n", lastMessage);
-  writeToClient(lastMessage);
-  //close(snew);
+  for (i = 0; i < MAXCONN; i++) {
+    int w3 = write(connections[i].sd, lastMessage, 63);
+    debugPrint("last message bytes sent = %d\n", w3);
+  }
 
   char * message;
   message = malloc(200);
@@ -678,6 +696,7 @@ void sig_handler(int signum) {
     writeToLogs("Info", "Caught SIGHUP. Configuration file 'nanny.config' re-read.\n");
     debugPrint("\n\n\nCaught SIGHUP. Configuration file 'nanny.config' re-read.\n\n\n");
     rereadFromConfigFile = 1;
+    sighup_called = 1;
     break;
   case 2:
     debugPrint("caught sigint, i am %d and parent is %d\n", getpid(), parentPid);
