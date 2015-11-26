@@ -127,14 +127,49 @@ void writeToLogs(char * logLevel, char * message);
 void clearLogs();
 void getDate(char * dateVar);
 
+
+void writeToProcNannyServerInfo() {
+  // PROCNANNYSERVERINFO
+  FILE *logFile;
+
+
+  if (getenv("PROCNANNYSERVERINFO") == NULL) { 
+    fprintf(stderr,"PROCNANNYSERVERINFO variable not set\n");
+    exit(0);
+  }
+  
+  if ((logFile = fopen(getenv("PROCNANNYSERVERINFO"), "w+")) == NULL) {
+    fprintf(stderr,"Error in opening the PROCNANNYSERVERINFO file \n");
+    exit(0);
+  }
+
+  char * hostName = malloc(50);
+  gethostname(hostName, 45);
+
+  char * newLogMessage = malloc(150);
+  int port = MY_PORT;
+  snprintf(newLogMessage, 150, "NODE %s PID %d PORT %d", hostName, getpid(), port);
+  
+  fputs(newLogMessage, logFile);
+  free(hostName);
+  free(newLogMessage);
+  fclose(logFile);  
+}
+
+
 void writeParentPIDToLogs()  {
+  char * hostName = malloc(50);
+  gethostname(hostName, 45);
+
   char * parentPIDMessage;
   parentPIDMessage = malloc(300);
+  int port = MY_PORT;
 
-  snprintf(parentPIDMessage, 290, "Parent process is PID %d. \n", getpid());
+  snprintf(parentPIDMessage, 290, "procnanny server: PID %d on %s, port %d. \n", getpid(), hostName, port);
   writeToLogs("Info", parentPIDMessage);
       
   free(parentPIDMessage);
+  free(hostName);
   return;
 }
 
@@ -403,6 +438,7 @@ int getPortNumber( int socketNum )
 int main(int argc, char * argv[]) {
   debugPrint("starting program\n");
   clearLogs();
+  writeToProcNannyServerInfo();
   writeParentPIDToLogs();
   int max = -1, omax;
   fd_set *readable = NULL;
