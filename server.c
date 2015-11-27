@@ -114,7 +114,7 @@ struct node * clientNames;
 struct node * monitoredPIDs;
 struct node * childPIDs;
 int messagesFromChildren = 0;
-int DEBUGGING = 1;
+int DEBUGGING = 0;
 int sock, snew;
 socklen_t fromlength;
 struct sockaddr_in master, from;

@@ -31,7 +31,7 @@ struct node * processList;
 struct node * monitoredPIDs;
 struct node * childPIDs;
 int messagesFromChildren = 0;
-int DEBUGGING = 1;
+int DEBUGGING = 0;
 
 
 int s;
@@ -606,7 +606,7 @@ int main(int argc, char * argv[]) {
 
   fcntl(killCountPipe[0], F_SETFL, O_NONBLOCK);
 
-  printf("connecting to %s on port %d \n", argv[1], atoi(argv[2]));
+  debugPrint("connecting to %s on port %d \n", argv[1], atoi(argv[2]));
   MY_PORT = atoi(argv[2]);
 	
   /* Put here the name of the sun on which the server is executed */
