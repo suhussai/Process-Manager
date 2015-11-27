@@ -42,6 +42,10 @@ To start the server
 To start a client
 4. make c
 
+OR
+
+./procnanny.server /path/to/configFile
+./procnanny.client hostNameOfProcnannyServer portNumberOfProcnannyServer
 Makefile can be updated for different circumstances.
 
 
