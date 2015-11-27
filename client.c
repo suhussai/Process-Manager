@@ -698,10 +698,61 @@ int main(int argc, char * argv[]) {
       // server received a sighup
       // so flush our linked list record
       // of processes
+
+      free(pointerToPipeBuffer);
+      free(pointerToProcessName);
+      pipeBuffer = NULL;
+      processName = NULL;
+
+
+
+
       if (processList) {
 	freeList(processList); // free it in case it is still set
 	processList = NULL;
       }
+
+
+
+      pipeBuffer = malloc(63);
+      pointerToPipeBuffer = pipeBuffer;
+
+      //      debugPrint("writing server\n");
+      //      writeToServer(a); // we likely dont need to write test again cuz 
+                                // our initial message should still be there
+      readFromServer(pipeBuffer);
+      debugPrint("got %s\n", pipeBuffer);
+    
+      if (pipeBuffer[0] == '!') {
+	keepLooping = 0;
+	debugPrint("got exit signal!!!!!\n");
+	continue;
+      }
+
+      //    char * tmpBuffer = pipeBuffer;
+  
+      //    char * processName;
+      len = 0;
+      numberofProcesses = 0;
+      processLifeSpan = 0;
+      PID = 0;
+
+      len = strchr(pipeBuffer,'#') - pipeBuffer;
+      processName = malloc(len+1);
+      pointerToProcessName = processName;
+      strncpy(processName, pipeBuffer, len);
+      processName[len] = '\0'; 
+
+      processName[strlen(processName) - 1] = '\0';
+
+  
+      pipeBuffer = strchr(pipeBuffer,'#');
+      numberofProcesses = atoi(pipeBuffer+1);
+      processLifeSpan = atoi(strchr(pipeBuffer,'!')+1);
+      debugPrint("server: we have  %d different procs to monitor\n", numberofProcesses);
+
+
+
     }
 
     free(pointerToPipeBuffer);

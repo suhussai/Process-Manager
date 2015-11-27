@@ -87,10 +87,9 @@ struct con {
 };
 
 int connectionWeSendMessageTo = -1;
-#define MAXCONN 2
+#define MAXCONN 3
 struct con connections[2]; 
 #define BUF_SIZE 63
-#define	MY_PORT	2222
 
 /* states used in struct con. */
 #define STATE_UNUSED 0
@@ -467,14 +466,20 @@ int main(int argc, char * argv[]) {
   while(rereadFromConfigFile == 1) {
 
     while(keepLooping == 1) {
-
+      
+      debugPrint("reread config file is %d \n", rereadFromConfigFile);
+      debugPrint("keepLooping is %d\n", keepLooping);
+      
       if (rereadFromConfigFile == 1) {
+	debugPrint("do we need to flush processList? (YES to confirm)....? \n");
 	if (processList) {
 	  freeList(processList); // free it in case it is still set
 	  processList = NULL;
+	  debugPrint("Yes\n");
 	}
+	
 
-	debugPrint("reread config file\n");
+	debugPrint("rereading config file!!\n");
 	fp2 = fopen(fileName,"r");
 	if (fp2 == NULL) { 
 	  clearLogs();
@@ -511,6 +516,7 @@ int main(int argc, char * argv[]) {
 
       }// while loop for reading file
 
+      debugPrint("done populating process list \n");
       rereadFromConfigFile = -1;
 
 
@@ -571,6 +577,16 @@ int main(int argc, char * argv[]) {
 
       }
 
+
+      if (sighup_called == 1) {
+	snprintf(tmpStr, 63, "%-20s#%20d!%20d", "null", getSize(processList), 99);
+	for (i = 0; i < MAXCONN; i++) {
+	  int w32 = write(connections[i].sd, tmpStr, 63);
+	  debugPrint("sighup message bytes sent = %d\n", w32);
+	}  
+	sighup_called = 0;
+      }
+
       i = select(maxfd + 1, readable, NULL, NULL,NULL);
       if (i == -1  && errno != EINTR)
 	err(1, "select failed");
@@ -622,13 +638,7 @@ int main(int argc, char * argv[]) {
 	      debugPrint("request for info received... sending\n");
 	      debugPrint("beginning write to internet socket\n");
 
-	      if (sighup_called == 1) {
-		snprintf(tmpStr, 63, "%-20s#%20d!%20d", "null", getSize(processList), 99);  
-		sighup_called = 0;
-	      }
-	      else {
-		snprintf(tmpStr, 63, "%-20s#%20d!%20d", "null", getSize(processList), 5);		
-	      }
+	      snprintf(tmpStr, 63, "%-20s#%20d!%20d", "null", getSize(processList), 5);		
 
 	      debugPrint("writing this to pipe: %s \n", tmpStr);
 	      int w2 = write(connections[i].sd, tmpStr, 63);
