@@ -21,7 +21,7 @@
 
 /*
  * Copyright (c) 2008 Bob Beck <beck@obtuse.com>
- * Some changes (related to the port number) by ***REMOVED***, March 2011.
+ * Some changes (related to the port number) by Paul Lu, March 2011.
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -47,7 +47,7 @@
  *
  * then run with select_server PORT
  * where PORT is some numeric port you want to listen on.
- * (***REMOVED***:  You can also get the OS to choose the port by not specifying PORT)
+ * (Paul Lu:  You can also get the OS to choose the port by not specifying PORT)
  *
  * to connect to it, then use telnet or nc
  * i.e.
@@ -301,7 +301,7 @@ void closecon (struct con *cp, int initflag)
   cp->sd = -1;
 }
 
-/* ***REMOVED*** */
+/* Paul Lu */
 /*
  * getPortNumber - given a valid file descriptor/socket, return the port number
  */
