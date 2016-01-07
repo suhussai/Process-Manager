@@ -1,5 +1,5 @@
 # procnanny
-Assignment1 CMPUT_3_7_9: C program to fork processes to monitor user specified processes  
+Assignment1 CMPUT_379: C program to fork processes to monitor user specified processes  
 
 procnanny --- 
 
